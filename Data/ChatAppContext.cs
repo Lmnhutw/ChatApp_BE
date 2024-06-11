@@ -1,5 +1,8 @@
-﻿using System;
+﻿using ChatApp_BE.Models;
+using Microsoft.EntityFrameworkCore;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 using System.Collections.Generic;
+
 using ChatApp_BE.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +26,9 @@ public partial class ChatAppContext : DbContext
     public virtual DbSet<RoomUser> RoomUsers { get; set; }
 
     public virtual DbSet<User> Users { get; set; }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        => optionsBuilder.UseSqlServer("Data Source=MINHNHUT\\MINHNHUT;Initial Catalog=ChatApp;Integrated Security=True;Encrypt=True;Trust Server Certificate=True");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -83,5 +89,14 @@ public partial class ChatAppContext : DbContext
         OnModelCreatingPartial(modelBuilder);
     }
 
+    //working on
     private partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+}
+
+public partial class ChatAppContext
+{
+    private partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
+    {
+        throw new NotImplementedException();
+    }
 }
