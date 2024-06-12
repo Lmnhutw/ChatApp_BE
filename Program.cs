@@ -19,6 +19,8 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+//Register AutoMapper
+
 // Configure JWT Authentication
 var key = Encoding.ASCII.GetBytes(builder.Configuration["fba5f90552581f07e644cc28abd6a567"] ?? "default_Secret_Key");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

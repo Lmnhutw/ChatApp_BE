@@ -6,35 +6,35 @@ namespace ChatApp_BE.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class MessageController : ControllerBase
+    public class UserController : ControllerBase
     {
-        // GET: api/<MessageController>
+        // GET: api/<UserController>
         [HttpGet]
         public IEnumerable<string> Get()
         {
             return new string[] { "value1", "value2" };
         }
 
-        // GET api/<MessageController>/5
+        // GET api/<UserController>/5
         [HttpGet("{id}")]
         public string Get(int id)
         {
             return "value";
         }
 
-        // POST api/<MessageController>
+        // POST api/<UserController>
         [HttpPost]
         public void Post([FromBody] string value)
         {
         }
 
-        // PUT api/<MessageController>/5
+        // PUT api/<UserController>/5
         [HttpPut("{id}")]
         public void Put(int id, [FromBody] string value)
         {
         }
 
-        // DELETE api/<MessageController>/5
+        // DELETE api/<UserController>/5
         [HttpDelete("{id}")]
         public void Delete(int id)
         {
