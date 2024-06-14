@@ -1,29 +1,44 @@
+using AutoMapper;
 using ChatApp_BE.Data;
 using ChatApp_BE.Hubs;
+using ChatApp_BE.Mappings;
+using ChatApp_BE.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System;
-
-//using ChatApp_BE.Data;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
-
-//Configure Entity Framework Core using Scaffold
-builder.Services.AddDbContext<ChatAppContext>(
-    options => options.UseSqlServer(builder.Configuration.GetConnectionString("ChatApp")));
 
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-//Register AutoMapper
+//Configure Entity Framework Core using Scaffold
+builder.Services.AddDbContext<ChatAppContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("ChatApp")));
+
+// Register AutoMapper
+//builder.Services.AddAutoMapper(typeof(MessageProfile), typeof(RoomProfile), typeof(UserProfile));
+
+// Configure Identity
+builder.Services.AddIdentity<User, IdentityRole<int>>(options =>
+{
+    options.SignIn.RequireConfirmedAccount = true; // Require email confirmation
+})
+    .AddEntityFrameworkStores<ChatAppContext>()
+    .AddDefaultTokenProviders();
 
 // Configure JWT Authentication
-var key = Encoding.ASCII.GetBytes(builder.Configuration["fba5f90552581f07e644cc28abd6a567"] ?? "default_Secret_Key");
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+var key = Encoding.ASCII.GetBytes(builder.Configuration["Jwt:Key"] ?? "default_secret_key");
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
@@ -35,7 +50,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-//Build SignalR
+// Add SignalR
 builder.Services.AddSignalR();
 
 var app = builder.Build();
