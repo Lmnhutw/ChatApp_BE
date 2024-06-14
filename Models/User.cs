@@ -1,9 +1,10 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Identity;
+using System;
 using System.Collections.Generic;
 
 namespace ChatApp_BE.Models;
 
-public partial class User
+public partial class User : IdentityUser<int>
 {
     public int UserId { get; set; }
 

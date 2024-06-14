@@ -6,6 +6,9 @@ using System.Collections.Generic;
 using ChatApp_BE.Models;
 using Microsoft.EntityFrameworkCore;
 
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+
 namespace ChatApp_BE.Data;
 
 public partial class ChatAppContext : DbContext
