@@ -22,7 +22,7 @@ builder.Services.AddDbContext<ChatAppContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("ChatApp")));
 
 // Register AutoMapper
-//builder.Services.AddAutoMapper(typeof(MessageProfile), typeof(RoomProfile), typeof(UserProfile));
+builder.Services.AddAutoMapper(typeof(UserProfile));
 
 // Configure Identity
 builder.Services.AddIdentity<User, IdentityRole<int>>(options =>
