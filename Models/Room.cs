@@ -1,10 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 
 namespace ChatApp_BE.Models;
 
-public partial class Room
+public class Room
 {
+    [Key]
     public int RoomId { get; set; }
 
     public string Name { get; set; } = null!;

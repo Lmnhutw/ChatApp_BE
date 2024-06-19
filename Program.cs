@@ -1,13 +1,17 @@
-using AutoMapper;
+﻿using AutoMapper;
 using ChatApp_BE.Data;
+using ChatApp_BE.Helpers;
 using ChatApp_BE.Hubs;
 using ChatApp_BE.Mappings;
 using ChatApp_BE.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Configuration;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,23 +21,49 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-//Configure Entity Framework Core using Scaffold
+//Configure Entity Framework Core
 builder.Services.AddDbContext<ChatAppContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("ChatApp")));
+{
+    var ConnectionStrings = builder.Configuration.GetConnectionString("ChatApp");
+    if (ConnectionStrings != null)
+    {
+        options.UseSqlServer(ConnectionStrings);
+    }
+    else
+    {
+        Console.WriteLine("Something went wrong when connecting to DB");
+    }
+});
 
 // Register AutoMapper
 builder.Services.AddAutoMapper(typeof(UserProfile));
 
+builder.Services.AddScoped<IEmailSenders>();
+
 // Configure Identity
-builder.Services.AddIdentity<User, IdentityRole<int>>(options =>
+//builder.Services.AddIdentity<User, IdentityRole<int>>(options =>
+//{
+//    options.SignIn.RequireConfirmedAccount = true; // Require email confirmation
+//})
+//    .AddRoles<IdentityRole>()
+//    .AddEntityFrameworkStores<ChatAppContext>()
+//    .AddDefaultTokenProviders();
+builder.Services.AddIdentity<User, IdentityRole>()
+                //// Thêm triển khai EF lưu trữ thông tin về Idetity (theo AppMvcContext -> MS SQL Server).
+                .AddDefaultTokenProviders()
+                // Thêm Token Provider - nó sử dụng để phát sinh token (reset password, confirm email ...)
+                // đổi email, số điện thoại ...
+                .AddEntityFrameworkStores<ChatAppContext>();
+
+builder.Services.AddAuthorization(options =>
 {
-    options.SignIn.RequireConfirmedAccount = true; // Require email confirmation
-})
-    .AddEntityFrameworkStores<ChatAppContext>()
-    .AddDefaultTokenProviders();
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 // Configure JWT Authentication
-var key = Encoding.ASCII.GetBytes(builder.Configuration["Jwt:Key"] ?? "default_secret_key");
+var key = Encoding.ASCII.GetBytes(builder.Configuration["SecretKey"]);
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;

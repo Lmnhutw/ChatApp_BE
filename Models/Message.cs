@@ -1,10 +1,13 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace ChatApp_BE.Models;
 
-public partial class Message
+public class Message
 {
+    [Key]
     public int MessageId { get; set; }
 
     public string Content { get; set; } = null!;

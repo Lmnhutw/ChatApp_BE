@@ -1,13 +1,13 @@
 ﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace ChatApp_BE.Models;
 
-public partial class User : IdentityUser<int>
+public class User : IdentityUser
 {
-    public int UserId { get; set; }
-
     public string? Nickname { get; set; }
 
     public string Email { get; set; } = null!;

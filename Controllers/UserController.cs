@@ -8,21 +8,31 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity.UI.Services;
 
 namespace ChatApp_BE.Controllers
+
 {
+    [AllowAnonymous]
     [ApiController]
     [Route("api/[controller]")]
-    public class UserController : ControllerBase
+    public class RegisterUser : ControllerBase
     {
         private readonly UserManager<User> _userManager;
         private readonly SignInManager<User> _signInManager;
         private readonly IEmailSenders _emailSender;
+        private readonly ILogger<RegisterUser> _logger;
 
-        public UserController(UserManager<User> userManager, SignInManager<User> signInManager, IEmailSenders emailSender)
+        public RegisterUser(
+           UserManager<User> userManager,
+           SignInManager<User> signInManager,
+           ILogger<RegisterUser> logger,
+           IEmailSenders emailSender)
         {
             _userManager = userManager;
             _signInManager = signInManager;
+            _logger = logger;
             _emailSender = emailSender;
         }
 

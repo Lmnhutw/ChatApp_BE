@@ -7,11 +7,11 @@ using System.Threading.Tasks;
 
 namespace ChatApp_BE.Helpers
 {
-    public class EmailSenders : IEmailSenders
+    public class IEmailSenders
     {
         private readonly IConfiguration _configuration;
 
-        public EmailSenders(IConfiguration configuration)
+        public IEmailSenders(IConfiguration configuration)
         {
             _configuration = configuration;
         }
