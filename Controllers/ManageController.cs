@@ -45,4 +45,18 @@ namespace ChatApp_BE.Controllers
             }
         }
     }
+
+    public class GetListUser : ControllerBase
+    {
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly ILogger<GetListUser> _logger;
+
+        public GetListUser(
+            UserManager<ApplicationUser> userManager,
+            ILogger<GetListUser> logger)
+        {
+            _userManager = userManager;
+            _logger = logger;
+        }
+    }
 }

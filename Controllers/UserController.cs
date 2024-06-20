@@ -78,7 +78,7 @@ namespace ChatApp_BE.Controllers
 
                     return Ok(new { Message = "Registration successful! Please check your email to confirm your account." });
                 }
-
+                
                 foreach (var error in result.Errors)
                 {
                     ModelState.AddModelError(string.Empty, error.Description);
@@ -92,30 +92,31 @@ namespace ChatApp_BE.Controllers
         [HttpGet("confirmemail")]
         public async Task<IActionResult> ConfirmEmail(string userId, string token)
         {
+            if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(token))
+            {
+                return BadRequest("UserId and token must be provided.");
+            }
+
             var user = await _userManager.FindByIdAsync(userId);
-            if (user == null || token == null)
+            if (user == null && user.EmailConfirmationToken != token)
             {
-                return BadRequest("Invalid email confirmation request.");
+                return BadRequest($"Invalid userId or token.");
             }
-
-            if (user.EmailConfirmationToken != token)
-            {
-                return BadRequest("Invalid email confirmation token.");
-            }
-
+                
+            // Confirm the email
             var result = await _userManager.ConfirmEmailAsync(user, token);
-            //if (user.EmailConfirmationToken == token)
-            //{
-            //    user.EmailConfirmed = true;
-            //}
             if (result.Succeeded)
             {
+                // Clear the EmailConfirmationToken once confirmed
                 user.EmailConfirmationToken = null;
                 await _userManager.UpdateAsync(user);
+
                 return Ok("Email confirmed successfully!");
             }
+
             return BadRequest("Email confirmation failed.");
         }
+
 
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginViewModel model)
@@ -133,22 +134,28 @@ namespace ChatApp_BE.Controllers
                     {
                         return Unauthorized("Invalid login attempt.");
                     }
-                    var tokenHandler = new JwtSecurityTokenHandler();
-                    var key = Encoding.UTF8.GetBytes(_config.GetSection("Jwt:SecretKey").Value!);
-                    var tokenDescriptor = new SecurityTokenDescriptor
+                    else
                     {
-                        Subject = new ClaimsIdentity(new Claim[]
+                        var tokenHandler = new JwtSecurityTokenHandler();
+                        var key = Encoding.UTF8.GetBytes(_config.GetSection("Jwt:SecretKey").Value!);
+                        var tokenDescriptor = new SecurityTokenDescriptor
                         {
+                            Subject = new ClaimsIdentity(new Claim[]
+                            {
                         new Claim(ClaimTypes.Name, user.UserName),
                         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
-                        }),
-                        Expires = DateTime.UtcNow.AddDays(7),
-                        SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-                    };
-                    var token = tokenHandler.CreateToken(tokenDescriptor);
-                    var tokenString = tokenHandler.WriteToken(token);
+                            }),
+                            Expires = DateTime.UtcNow.AddDays(7),
+                            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+                        };
 
-                    return Ok(new { Token = tokenString });
+                        var token = tokenHandler.CreateToken(tokenDescriptor);
+                        var tokenString = tokenHandler.WriteToken(token);
+
+                        return Ok(new { Token = tokenString });
+                    }
+                    return Ok("Login successful!");
+                    
                 }
 
                 return BadRequest(ModelState);
