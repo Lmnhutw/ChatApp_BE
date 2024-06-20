@@ -20,5 +20,5 @@ public class Message
 
     public virtual Room Room { get; set; } = null!;
 
-    public virtual User? User { get; set; }
+    public virtual ApplicationUser? User { get; set; }
 }

@@ -18,13 +18,18 @@ namespace ChatApp_BE.Helpers
 
         public async Task SendEmailAsync(string subject, string toEmail, string message)
         {
-            var apiKey = _configuration["SendGrid:ApiKey"];
+            var apiKey = _configuration["SendGrid:ApiSenderKey"];
             var client = new SendGridClient(apiKey);
             var from = new EmailAddress("minhnhut.services.test@gmail.com", "ChapApp");
             var to = new EmailAddress(toEmail);
-            var plainTextContent = message;
-            var htmlContent = message;
-            var msg = MailHelper.CreateSingleEmail(from, to, subject, plainTextContent, htmlContent);
+            //var plainTextContent = message;
+            //var htmlContent = message;
+            var templateId = _configuration["SendGrid:TemplateId"];
+            var templateData = new Dictionary<string, object>
+            {
+                {"confirm_link", "{{twilio_code}}" },
+            };
+            var msg = MailHelper.CreateSingleTemplateEmail(from, to, templateId, templateData);
             var response = await client.SendEmailAsync(msg);
         }
     }

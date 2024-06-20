@@ -20,5 +20,5 @@ public class RoomUser
     public virtual Room Room { get; set; } = null!;
 
     [ForeignKey("Id")]
-    public virtual User User { get; set; } = null!;
+    public virtual ApplicationUser User { get; set; } = null!;
 }

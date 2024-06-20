@@ -12,7 +12,7 @@ public class Room
 
     public int AdminId { get; set; }
 
-    public virtual User Admin { get; set; } = null!;
+    public virtual ApplicationUser Admin { get; set; } = null!;
 
     public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
 

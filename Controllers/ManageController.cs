@@ -8,11 +8,11 @@ namespace ChatApp_BE.Controllers
 {
     public class DeleteUser : ControllerBase
     {
-        private readonly UserManager<User> _userManager;
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly ILogger<DeleteUser> _logger;
 
         public DeleteUser(
-            UserManager<User> userManager,
+            UserManager<ApplicationUser> userManager,
             ILogger<DeleteUser> logger)
         {
             _userManager = userManager;
@@ -31,7 +31,7 @@ namespace ChatApp_BE.Controllers
             var user = await _userManager.FindByEmailAsync(model.Email);
             if (user == null)
             {
-                return NotFound("User not found.");
+                return NotFound("ApplicationUser not found.");
             }
 
             var result = await _userManager.DeleteAsync(user);

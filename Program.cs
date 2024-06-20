@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.IdentityModel.Tokens;
 using System.Configuration;
 using System.Text;
@@ -38,36 +39,21 @@ builder.Services.AddDbContext<ChatAppContext>(options =>
 // Register AutoMapper
 builder.Services.AddAutoMapper(typeof(UserProfile));
 
+// Register Email Sender
 builder.Services.AddScoped<IEmailSenders>();
 
 // Configure Identity
-//builder.Services.AddIdentity<User, IdentityRole<int>>(options =>
-//{
-//    options.SignIn.RequireConfirmedAccount = true; // Require email confirmation
-//})
-//    .AddRoles<IdentityRole>()
-//    .AddEntityFrameworkStores<ChatAppContext>()
-//    .AddDefaultTokenProviders();
-builder.Services.AddIdentity<User, IdentityRole>()
-                //// Thêm triển khai EF lưu trữ thông tin về Idetity (theo AppMvcContext -> MS SQL Server).
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
                 .AddDefaultTokenProviders()
-                // Thêm Token Provider - nó sử dụng để phát sinh token (reset password, confirm email ...)
-                // đổi email, số điện thoại ...
                 .AddEntityFrameworkStores<ChatAppContext>();
 
-builder.Services.AddAuthorization(options =>
-{
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build();
-});
-
 // Configure JWT Authentication
-var key = Encoding.ASCII.GetBytes(builder.Configuration["SecretKey"]);
+var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SecretKey"] ?? "default_secret_key");
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
 })
     .AddJwtBearer(options =>
     {
@@ -80,7 +66,7 @@ builder.Services.AddAuthentication(options =>
         };
     });
 
-// Add SignalR
+// Configure SignalR
 builder.Services.AddSignalR();
 
 var app = builder.Build();
@@ -99,7 +85,8 @@ else
 
 app.UseHttpsRedirection();
 
-app.UseAuthentication(); // Add authentication middleware
+// Add authentication middleware
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

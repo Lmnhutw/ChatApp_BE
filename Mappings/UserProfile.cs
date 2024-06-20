@@ -8,8 +8,8 @@ namespace ChatApp_BE.Mappings
     {
         public UserProfile()
         {
-            CreateMap<User, UserViewModel>();
-            CreateMap<UserViewModel, User>();
+            CreateMap<ApplicationUser, UserViewModel>();
+            CreateMap<UserViewModel, ApplicationUser>();
         }
     }
 }

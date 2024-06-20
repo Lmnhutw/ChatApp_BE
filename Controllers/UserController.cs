@@ -19,21 +19,25 @@ namespace ChatApp_BE.Controllers
     [Route("api/[controller]")]
     public class RegisterUser : ControllerBase
     {
-        private readonly UserManager<User> _userManager;
-        private readonly SignInManager<User> _signInManager;
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IEmailSenders _emailSender;
         private readonly ILogger<RegisterUser> _logger;
+        private readonly IConfiguration _config;
 
         public RegisterUser(
-           UserManager<User> userManager,
-           SignInManager<User> signInManager,
+           UserManager<ApplicationUser> userManager,
+           SignInManager<ApplicationUser> signInManager,
            ILogger<RegisterUser> logger,
-           IEmailSenders emailSender)
+           IEmailSenders emailSender,
+           IConfiguration configuration
+           )
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _logger = logger;
             _emailSender = emailSender;
+            _config = configuration;
         }
 
         [HttpPost("register")]
@@ -47,20 +51,24 @@ namespace ChatApp_BE.Controllers
                     return BadRequest("Email was already used.");
                 }
 
-                user = new User
+                user = new ApplicationUser
                 {
                     UserName = model.Email,
                     Email = model.Email,
-                    FullName = model.FullName
+                    FullName = model.FullName,
                 };
 
                 var result = await _userManager.CreateAsync(user, model.Password);
                 if (result.Succeeded)
                 {
                     var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                    user.EmailConfirmationToken = token;
+                    await _userManager.UpdateAsync(user);
+                    user.EmailConfirmed = true;
+
                     var confirmationLink = Url.Action(
                         nameof(ConfirmEmail),
-                        "User",
+                        "ApplicationUser",
                         new { userId = user.Id, token },
                         Request.Scheme
                         );
@@ -80,60 +88,75 @@ namespace ChatApp_BE.Controllers
             return BadRequest(ModelState);
         }
 
+        [AllowAnonymous]
         [HttpGet("confirmemail")]
         public async Task<IActionResult> ConfirmEmail(string userId, string token)
         {
-            if (userId == null || token == null)
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || token == null)
             {
                 return BadRequest("Invalid email confirmation request.");
             }
 
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user == null)
+            if (user.EmailConfirmationToken != token)
             {
-                return BadRequest("Invalid email confirmation request.");
+                return BadRequest("Invalid email confirmation token.");
             }
 
             var result = await _userManager.ConfirmEmailAsync(user, token);
-
+            //if (user.EmailConfirmationToken == token)
+            //{
+            //    user.EmailConfirmed = true;
+            //}
             if (result.Succeeded)
             {
+                user.EmailConfirmationToken = null;
+                await _userManager.UpdateAsync(user);
                 return Ok("Email confirmed successfully!");
             }
-
             return BadRequest("Email confirmation failed.");
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginViewModel model)
         {
-            if (ModelState.IsValid)
+            try
             {
-                var user = await _userManager.FindByEmailAsync(model.Email);
-                if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
+                if (ModelState.IsValid)
                 {
-                    return Unauthorized("Invalid login attempt.");
-                }
-
-                var tokenHandler = new JwtSecurityTokenHandler();
-                var key = Encoding.ASCII.GetBytes("your_jwt_secret_key_here");
-                var tokenDescriptor = new SecurityTokenDescriptor
-                {
-                    Subject = new ClaimsIdentity(new Claim[]
+                    var user = await _userManager.FindByEmailAsync(model.Email);
+                    if (!user.EmailConfirmed)
                     {
+                        return BadRequest("Email is not confirmed.");
+                    }
+                    if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
+                    {
+                        return Unauthorized("Invalid login attempt.");
+                    }
+                    var tokenHandler = new JwtSecurityTokenHandler();
+                    var key = Encoding.UTF8.GetBytes(_config.GetSection("Jwt:SecretKey").Value!);
+                    var tokenDescriptor = new SecurityTokenDescriptor
+                    {
+                        Subject = new ClaimsIdentity(new Claim[]
+                        {
                         new Claim(ClaimTypes.Name, user.UserName),
                         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
-                    }),
-                    Expires = DateTime.UtcNow.AddDays(7),
-                    SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-                };
-                var token = tokenHandler.CreateToken(tokenDescriptor);
-                var tokenString = tokenHandler.WriteToken(token);
+                        }),
+                        Expires = DateTime.UtcNow.AddDays(7),
+                        SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+                    };
+                    var token = tokenHandler.CreateToken(tokenDescriptor);
+                    var tokenString = tokenHandler.WriteToken(token);
 
-                return Ok(new { Token = tokenString });
+                    return Ok(new { Token = tokenString });
+                }
+
+                return BadRequest(ModelState);
             }
-
-            return BadRequest(ModelState);
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         [HttpPost("logout")]
@@ -143,67 +166,67 @@ namespace ChatApp_BE.Controllers
             return Ok("Logged out successfully!");
         }
 
-        [HttpPost("forgotpassword")]
-        public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
-        {
-            if (ModelState.IsValid)
-            {
-                var user = await _userManager.FindByEmailAsync(model.Email);
-                if (user == null || !(await _userManager.IsEmailConfirmedAsync(user)))
-                {
-                    return BadRequest("The user either does not exist or is not confirmed.");
-                }
+        //    [HttpPost("forgotpassword")]
+        //    public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
+        //    {
+        //        if (ModelState.IsValid)
+        //        {
+        //            var user = await _userManager.FindByEmailAsync(model.Email);
+        //            if (user == null || !(await _userManager.IsEmailConfirmedAsync(user)))
+        //            {
+        //                return BadRequest("The user either does not exist or is not confirmed.");
+        //            }
 
-                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-                var resetLink = Url.Action(
-                    nameof(ResetPassword),
-                    "User",
-                    new { token, email = user.Email },
-                    Request.Scheme
-                    );
-                await _emailSender.SendEmailAsync("Reset Password",
-                    model.Email,
-                    $"Please reset your password by clicking <a href=\"{resetLink}\">here</a>."
-                    );
+        //            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        //            var resetLink = Url.Action(
+        //                nameof(ResetPassword),
+        //                "ApplicationUser",
+        //                new { token, email = user.Email },
+        //                Request.Scheme
+        //                );
+        //            await _emailSender.SendEmailAsync("Reset Password",
+        //                model.Email,
+        //                $"Please reset your password by clicking <a href=\"{resetLink}\">here</a>."
+        //                );
 
-                return Ok(new { message = "Please check your email to reset your password." });
-            }
+        //            return Ok(new { message = "Please check your email to reset your password." });
+        //        }
 
-            return BadRequest(ModelState);
-        }
+        //        return BadRequest(ModelState);
+        //    }
 
-        [HttpGet("resetpassword")]
-        public IActionResult ResetPassword(string token, string email)
-        {
-            var model = new ResetPasswordViewModel { Token = token, Email = email };
-            return Ok(model); // Return a view in real implementation
-        }
+        //    [HttpGet("resetpassword")]
+        //    public IActionResult ResetPassword(string token, string email)
+        //    {
+        //        var model = new ResetPasswordViewModel { Token = token, Email = email };
+        //        return Ok(model); // Return a view in real implementation
+        //    }
 
-        [HttpPost("resetpassword")]
-        public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
-        {
-            if (ModelState.IsValid)
-            {
-                var user = await _userManager.FindByEmailAsync(model.Email);
-                if (user == null)
-                {
-                    return BadRequest("Invalid password reset request.");
-                }
+        //    [HttpPost("resetpassword")]
+        //    public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
+        //    {
+        //        if (ModelState.IsValid)
+        //        {
+        //            var user = await _userManager.FindByEmailAsync(model.Email);
+        //            if (user == null)
+        //            {
+        //                return BadRequest("Invalid password reset request.");
+        //            }
 
-                var result = await _userManager.ResetPasswordAsync(user, model.Token, model.Password);
+        //            var result = await _userManager.ResetPasswordAsync(user, model.Token, model.Password);
 
-                if (result.Succeeded)
-                {
-                    return Ok("Password reset successful!");
-                }
+        //            if (result.Succeeded)
+        //            {
+        //                return Ok("Password reset successful!");
+        //            }
 
-                foreach (var error in result.Errors)
-                {
-                    ModelState.AddModelError(string.Empty, error.Description);
-                }
-            }
+        //            foreach (var error in result.Errors)
+        //            {
+        //                ModelState.AddModelError(string.Empty, error.Description);
+        //            }
+        //        }
 
-            return BadRequest(ModelState);
-        }
+        //        return BadRequest(ModelState);
+        //    }
     }
 }
