@@ -1,11 +1,14 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ChatApp_BE.Models;
 
-public partial class RoomUser
+public class RoomUser
 {
-    public int UserId { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     public int RoomId { get; set; }
 
@@ -13,7 +16,9 @@ public partial class RoomUser
 
     public bool IsMember { get; set; }
 
+    [ForeignKey("RoomId")]
     public virtual Room Room { get; set; } = null!;
 
-    public virtual User User { get; set; } = null!;
+    [ForeignKey("Id")]
+    public virtual ApplicationUser User { get; set; } = null!;
 }

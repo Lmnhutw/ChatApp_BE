@@ -1,6 +1,6 @@
 ﻿namespace ChatApp_BE.ViewModels
 {
-    public class ForgotPasswordViewModel
+    public class DeleteUserViewModel
     {
         public string? Email { get; set; }
     }
