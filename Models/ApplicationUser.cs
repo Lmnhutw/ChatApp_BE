@@ -1,22 +1,22 @@
 ﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace ChatApp_BE.Models;
 
-public partial class User : IdentityUser<int>
+public class ApplicationUser : IdentityUser
 {
-    public int UserId { get; set; }
-
     public string? Nickname { get; set; }
 
-    public string Email { get; set; } = null!;
+    public override string? Email { get; set; } = string.Empty;
 
-    public bool EmailConfirmed { get; set; }
+    public override bool EmailConfirmed { get; set; }
 
-    public string? PasswordHash { get; set; }
+    public override string? PasswordHash { get; set; }
 
-    public string? SecurityStamp { get; set; }
+    public override string? SecurityStamp { get; set; }
 
     public string? FullName { get; set; }
 

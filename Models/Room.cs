@@ -1,17 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 
 namespace ChatApp_BE.Models;
 
-public partial class Room
+public class Room
 {
+    [Key]
     public int RoomId { get; set; }
 
     public string Name { get; set; } = null!;
 
     public int AdminId { get; set; }
 
-    public virtual User Admin { get; set; } = null!;
+    public virtual ApplicationUser Admin { get; set; } = null!;
 
     public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
 
