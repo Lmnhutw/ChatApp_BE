@@ -27,7 +27,7 @@ namespace ChatApp_BE.Helpers
             var templateId = _configuration["SendGrid:TemplateId"];
             var templateData = new Dictionary<string, object>
             {
-                {"confirm_link", "{{twilio_code}}" },
+                {"TKey1", "TValue1" },
             };
             var msg = MailHelper.CreateSingleTemplateEmail(from, to, templateId, templateData);
             var response = await client.SendEmailAsync(msg);
