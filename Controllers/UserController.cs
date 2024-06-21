@@ -10,6 +10,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity.UI.Services;
+using Microsoft.AspNetCore.WebUtilities;
+using System.Text.Encodings.Web;
 
 namespace ChatApp_BE.Controllers
 
@@ -61,24 +63,30 @@ namespace ChatApp_BE.Controllers
                 var result = await _userManager.CreateAsync(user, model.Password);
                 if (result.Succeeded)
                 {
-                    var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                    user.EmailConfirmationToken = token;
+                    var userId = await _userManager.GetUserIdAsync(user);
+                    var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                    code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+                    user.EmailConfirmationToken = code;
                     await _userManager.UpdateAsync(user);
                     user.EmailConfirmed = true;
 
                     var confirmationLink = Url.Action(
                         nameof(ConfirmEmail),
                         "ApplicationUser",
-                        new { userId = user.Id, token },
+                        new
+                        {
+                            userId = user.Id,
+                            token = code
+                        },
                         Request.Scheme
                         );
                     await _emailSender.SendEmailAsync("Confirm your email",
                         model.Email,
-                        $"Please confirm your email by clicking <a href=\"{confirmationLink}\">here</a>.");
+                        $"Please confirm your email by clicking <a href='{HtmlEncoder.Default.Encode(confirmationLink)}'>here</a>.");
 
                     return Ok(new { Message = "Registration successful! Please check your email to confirm your account." });
                 }
-                
+
                 foreach (var error in result.Errors)
                 {
                     ModelState.AddModelError(string.Empty, error.Description);
@@ -102,7 +110,7 @@ namespace ChatApp_BE.Controllers
             {
                 return BadRequest($"Invalid userId or token.");
             }
-                
+
             // Confirm the email
             var result = await _userManager.ConfirmEmailAsync(user, token);
             if (result.Succeeded)
@@ -116,7 +124,6 @@ namespace ChatApp_BE.Controllers
 
             return BadRequest("Email confirmation failed.");
         }
-
 
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginViewModel model)
@@ -152,10 +159,9 @@ namespace ChatApp_BE.Controllers
                         var token = tokenHandler.CreateToken(tokenDescriptor);
                         var tokenString = tokenHandler.WriteToken(token);
 
-                        return Ok(new { Token = tokenString });
+                        //return Ok(new { Token = tokenString });
                     }
                     return Ok("Login successful!");
-                    
                 }
 
                 return BadRequest(ModelState);
