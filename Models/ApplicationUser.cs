@@ -8,7 +8,7 @@ namespace ChatApp_BE.Models;
 
 public class ApplicationUser : IdentityUser
 {
-    public string? Nickname { get; set; }
+    public string? DisplayName { get; set; }
 
     public override string? Email { get; set; } = string.Empty;
 
