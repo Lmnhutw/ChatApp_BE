@@ -10,11 +10,11 @@ public class Message
     [Key]
     public int MessageId { get; set; }
 
+    public string? FullName { get; set; }
+
     public string Content { get; set; } = null!;
 
     public DateTime Timestamp { get; set; }
-
-    public int? UserId { get; set; }
 
     public int RoomId { get; set; }
 

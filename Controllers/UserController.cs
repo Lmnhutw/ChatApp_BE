@@ -172,11 +172,13 @@ namespace ChatApp_BE.Controllers
             }
         }
 
+        [Authorize]
         [HttpPost("logout")]
         public async Task<IActionResult> Logout()
         {
             await _signInManager.SignOutAsync();
-            return Ok("Logged out successfully!");
+            _logger.LogInformation("User log out");
+            return Ok(new { Message = "Logged out successfully!" });
         }
 
         //    [HttpPost("forgotpassword")]
