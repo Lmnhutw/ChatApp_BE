@@ -8,11 +8,11 @@ public class Room
     [Key]
     public int RoomId { get; set; }
 
-    public string Name { get; set; } = null!;
-
-    public int AdminId { get; set; }
-
-    public virtual ApplicationUser Admin { get; set; } = null!;
+    public string? Name { get; set; } = null!;
+    public string? CreatedBy { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public ApplicationUser Admin { get; set; }
+    public string? FullName { get; set; }
 
     public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
 

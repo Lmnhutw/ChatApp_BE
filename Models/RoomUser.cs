@@ -16,6 +16,8 @@ public class RoomUser
 
     public bool IsMember { get; set; }
 
+    public bool IsAdmin { get; set; }
+
     [ForeignKey("RoomId")]
     public virtual Room Room { get; set; } = null!;
 

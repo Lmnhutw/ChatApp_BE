@@ -2,15 +2,21 @@
 using ChatApp_BE.Models;
 using ChatApp_BE.ViewModels;
 
-namespace ChatApp_BE.Mappings
+public class RoomProfile : Profile
 {
-    public class RoomProfile : Profile
+    public RoomProfile()
     {
-        public RoomProfile()
-        {
-            // CreateMap<Room, RoomViewModel>().ForMember(dst => dst.AdminName, opt => opt.MapFrom(x => x.Admin.FullName));
+        CreateMap<Room, RoomViewModel>()
+            .ForMember(dst => dst.RoomName, opt => opt.MapFrom(x => x.Name))
+            .ForMember(dst => dst.AdminName, opt => opt.MapFrom(x => x.Admin.FullName));
 
-            // CreateMap<RoomViewModel, Room>();
-        }
+        CreateMap<RoomUser, RoleUserViewModel>()
+            .ForMember(dst => dst.RoomId, opt => opt.MapFrom(x => x.RoomId))
+            .ForMember(dst => dst.Email, opt => opt.MapFrom(x => x.User.Email))
+            .ForMember(dst => dst.FullName, opt => opt.MapFrom(x => x.User.FullName))
+            .ForMember(dst => dst.Role, opt => opt.MapFrom(x => x.IsModerator ? "Moderator" : "Member"));
+
+        CreateMap<RoomViewModel, Room>()
+            .ForMember(dst => dst.Name, opt => opt.MapFrom(x => x.RoomName));
     }
 }

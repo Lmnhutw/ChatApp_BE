@@ -168,16 +168,18 @@ namespace ChatApp_BE.Migrations
                 {
                     RoomId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    AdminId = table.Column<int>(type: "int", nullable: false),
-                    AdminId1 = table.Column<string>(type: "nvarchar(450)", nullable: true)
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    AdminId = table.Column<string>(type: "nvarchar(450)", nullable: true),
+                    FullName = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Rooms", x => x.RoomId);
                     table.ForeignKey(
-                        name: "FK_Rooms_AspNetUsers_AdminId1",
-                        column: x => x.AdminId1,
+                        name: "FK_Rooms_AspNetUsers_AdminId",
+                        column: x => x.AdminId,
                         principalTable: "AspNetUsers",
                         principalColumn: "Id");
                 });
@@ -217,7 +219,8 @@ namespace ChatApp_BE.Migrations
                     Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     RoomId = table.Column<int>(type: "int", nullable: false),
                     IsModerator = table.Column<bool>(type: "bit", nullable: false),
-                    IsMember = table.Column<bool>(type: "bit", nullable: false)
+                    IsMember = table.Column<bool>(type: "bit", nullable: false),
+                    IsAdmin = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -286,9 +289,9 @@ namespace ChatApp_BE.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Rooms_AdminId1",
+                name: "IX_Rooms_AdminId",
                 table: "Rooms",
-                column: "AdminId1");
+                column: "AdminId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RoomUsers_Id",
