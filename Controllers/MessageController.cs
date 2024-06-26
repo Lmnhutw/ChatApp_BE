@@ -1,6 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-
-// For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+using Microsoft.EntityFrameworkCore;
+using ChatApp_BE.Models;
+using ChatApp_BE.ViewModels;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using ChatApp_BE.Data;
 
 namespace ChatApp_BE.Controllers
 {
@@ -8,36 +12,146 @@ namespace ChatApp_BE.Controllers
     [ApiController]
     public class MessageController : ControllerBase
     {
-        // GET: api/<MessageController>
+        private readonly ChatAppContext _cxt;
+
+        public MessageController(ChatAppContext cxt)
+        {
+            _cxt = cxt;
+        }
+
+        // GET: api/Message
         [HttpGet]
-        public IEnumerable<string> Get()
+        public async Task<ActionResult<IEnumerable<MessageViewModel>>> GetMessages()
         {
-            return new string[] { "value1", "value2" };
+            var messages = await _cxt.Messages
+                                         .Include(m => m.User)
+                                         .Include(m => m.Room)
+                                         .ToListAsync();
+
+            var messageViewModels = new List<MessageViewModel>();
+            foreach (var message in messages)
+            {
+                messageViewModels.Add(new MessageViewModel
+                {
+                    MessageId = message.MessageId,
+                    Content = message.Content,
+                    Timestamp = message.Timestamp,
+                    UserId = message.Id,
+                    UserName = message.User.FullName,
+                    RoomId = message.RoomId,
+                    RoomName = message.Room.Name
+                });
+            }
+
+            return Ok(messageViewModels);
         }
 
-        // GET api/<MessageController>/5
+        // GET: api/Message/5
         [HttpGet("{id}")]
-        public string Get(int id)
+        public async Task<ActionResult<MessageViewModel>> GetMessage(int id)
         {
-            return "value";
+            var message = await _cxt.Messages
+                                        .Include(m => m.User)
+                                        .Include(m => m.Room)
+                                        .FirstOrDefaultAsync(m => m.MessageId == id);
+
+            if (message == null)
+            {
+                return NotFound();
+            }
+
+            var messageViewModel = new MessageViewModel
+            {
+                MessageId = message.MessageId,
+                Content = message.Content,
+                Timestamp = message.Timestamp,
+                UserId = message.Id,
+                UserName = message.User.FullName,
+                RoomId = message.RoomId,
+                RoomName = message.Room.Name
+            };
+
+            return Ok(messageViewModel);
         }
 
-        // POST api/<MessageController>
+        // POST: api/Message
         [HttpPost]
-        public void Post([FromBody] string value)
+        public async Task<ActionResult<Message>> PostMessage(MessageViewModel messageViewModel)
         {
+            var message = new Message
+            {
+                Content = messageViewModel.Content,
+                Timestamp = messageViewModel.Timestamp,
+                RoomId = messageViewModel.RoomId,
+                Id = messageViewModel.UserId
+            };
+
+            _cxt.Messages.Add(message);
+            await _cxt.SaveChangesAsync();
+
+            return CreatedAtAction("GetMessage", new { id = message.MessageId }, message);
         }
 
-        // PUT api/<MessageController>/5
+        // PUT: api/Message/5
         [HttpPut("{id}")]
-        public void Put(int id, [FromBody] string value)
+        public async Task<IActionResult> PutMessage(int id, MessageViewModel messageViewModel)
         {
+            if (id != messageViewModel.MessageId)
+            {
+                return BadRequest();
+            }
+
+            var message = await _cxt.Messages.FindAsync(id);
+            if (message == null)
+            {
+                return NotFound();
+            }
+
+            message.Content = messageViewModel.Content;
+            message.Timestamp = messageViewModel.Timestamp;
+            message.RoomId = messageViewModel.RoomId;
+            message.Id = messageViewModel.UserId;
+
+            _cxt.Entry(message).State = EntityState.Modified;
+
+            try
+            {
+                await _cxt.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!MessageExists(id))
+                {
+                    return NotFound();
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            return NoContent();
         }
 
-        // DELETE api/<MessageController>/5
+        // DELETE: api/Message/5
         [HttpDelete("{id}")]
-        public void Delete(int id)
+        public async Task<IActionResult> DeleteMessage(int id)
         {
+            var message = await _cxt.Messages.FindAsync(id);
+            if (message == null)
+            {
+                return NotFound();
+            }
+
+            _cxt.Messages.Remove(message);
+            await _cxt.SaveChangesAsync();
+
+            return NoContent();
+        }
+
+        private bool MessageExists(int id)
+        {
+            return _cxt.Messages.Any(e => e.MessageId == id);
         }
     }
 }

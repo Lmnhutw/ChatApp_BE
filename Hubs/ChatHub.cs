@@ -23,7 +23,7 @@ namespace ChatApp_BE.Hubs
             var msg = new Message
             {
                 Content = model.Content,
-                FullName = model.FullName,
+                Id = model.UserId,
                 RoomId = model.RoomId
             };
 
@@ -36,6 +36,8 @@ namespace ChatApp_BE.Hubs
 
         public async Task JoinRoom(int roomId)
         {
+            await Clients.All
+                .SendAsync("ReceiveMessage", "admin", $"{Context.ConnectionId} Has joined ");
             await Groups.AddToGroupAsync(Context.ConnectionId, roomId.ToString());
             await Clients.Group(roomId.ToString()).SendAsync("ShowWho", $"{Context.ConnectionId} joined the room.");
         }
