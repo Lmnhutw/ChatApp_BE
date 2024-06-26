@@ -1,5 +1,4 @@
 ﻿using ChatApp_BE.Models;
-using ChatApp_BE.ViewModels;
 using ChatApp_BE.Helpers;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.WebUtilities;
 using System.Text.Encodings.Web;
+using ChatApp_BE.ViewModels.AuthViewModel;
 
 namespace ChatApp_BE.Controllers
 
@@ -19,18 +19,18 @@ namespace ChatApp_BE.Controllers
     [AllowAnonymous]
     [ApiController]
     [Route("api/[controller]")]
-    public class RegisterUser : ControllerBase
+    public class AuthController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IEmailSenders _emailSender;
-        private readonly ILogger<RegisterUser> _logger;
+        private readonly ILogger<AuthController> _logger;
         private readonly IConfiguration _config;
 
-        public RegisterUser(
+        public AuthController(
            UserManager<ApplicationUser> userManager,
            SignInManager<ApplicationUser> signInManager,
-           ILogger<RegisterUser> logger,
+           ILogger<AuthController> logger,
            IEmailSenders emailSender,
            IConfiguration configuration
            )
@@ -70,21 +70,21 @@ namespace ChatApp_BE.Controllers
                     await _userManager.UpdateAsync(user);
                     user.EmailConfirmed = true;
 
-                    var confirmationLink = Url.Action(
-                        nameof(ConfirmEmail),
-                        "ApplicationUser",
-                        new
-                        {
-                            userId = user.Id,
-                            token = code
-                        },
-                        Request.Scheme
-                        );
-                    await _emailSender.SendEmailAsync("Confirm your email",
-                        model.Email,
-                        $"Please confirm your email by clicking <a href='{HtmlEncoder.Default.Encode(confirmationLink)}'>here</a>.");
+                    //var confirmationLink = Url.Action(
+                    //    nameof(ConfirmEmail),
+                    //    "ApplicationUser",
+                    //    new
+                    //    {
+                    //        userId = user.Id,
+                    //        token = code
+                    //    },
+                    //    Request.Scheme
+                    //    );
+                    //await _emailSender.SendEmailAsync("Confirm your email",
+                    //    model.Email,
+                    //    $"Please confirm your email by clicking <a href='{HtmlEncoder.Default.Encode(confirmationLink)}'>here</a>.");
 
-                    return Ok(new { Message = "Registration successful! Please check your email to confirm your account." });
+                    //return Ok(new { Message = "Registration successful! Please check your email to confirm your account." });
                 }
 
                 foreach (var error in result.Errors)

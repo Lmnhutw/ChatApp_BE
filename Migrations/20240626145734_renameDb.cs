@@ -39,7 +39,7 @@ namespace ChatApp_BE.Migrations
                 table: "Messages");
 
             migrationBuilder.DropForeignKey(
-                name: "FK_Rooms_AspNetUsers_AdminId1",
+                name: "FK_Rooms_AspNetUsers_AdminId",
                 table: "Rooms");
 
             migrationBuilder.DropForeignKey(
@@ -173,9 +173,9 @@ namespace ChatApp_BE.Migrations
                 onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_Rooms_Users_AdminId1",
+                name: "FK_Rooms_Users_AdminId",
                 table: "Rooms",
-                column: "AdminId1",
+                column: "AdminId",
                 principalTable: "Users",
                 principalColumn: "Id");
 
@@ -240,7 +240,7 @@ namespace ChatApp_BE.Migrations
                 table: "RoleClaims");
 
             migrationBuilder.DropForeignKey(
-                name: "FK_Rooms_Users_AdminId1",
+                name: "FK_Rooms_Users_AdminId",
                 table: "Rooms");
 
             migrationBuilder.DropForeignKey(
@@ -434,9 +434,9 @@ namespace ChatApp_BE.Migrations
                 principalColumn: "Id");
 
             migrationBuilder.AddForeignKey(
-                name: "FK_Rooms_AspNetUsers_AdminId1",
+                name: "FK_Rooms_AspNetUsers_AdminId",
                 table: "Rooms",
-                column: "AdminId1",
+                column: "AdminId",
                 principalTable: "AspNetUsers",
                 principalColumn: "Id");
 

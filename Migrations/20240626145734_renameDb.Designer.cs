@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ChatApp_BE.Migrations
 {
     [DbContext(typeof(ChatAppContext))]
-    [Migration("20240625152826_renameDb")]
+    [Migration("20240626145734_renameDb")]
     partial class renameDb
     {
         /// <inheritdoc />
@@ -149,19 +149,24 @@ namespace ChatApp_BE.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RoomId"));
 
-                    b.Property<int>("AdminId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("AdminId1")
+                    b.Property<string>("AdminId")
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FullName")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Name")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("RoomId");
 
-                    b.HasIndex("AdminId1");
+                    b.HasIndex("AdminId");
 
                     b.ToTable("Rooms");
                 });
@@ -173,6 +178,9 @@ namespace ChatApp_BE.Migrations
 
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsAdmin")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsMember")
                         .HasColumnType("bit");
@@ -341,7 +349,7 @@ namespace ChatApp_BE.Migrations
                 {
                     b.HasOne("ChatApp_BE.Models.ApplicationUser", "Admin")
                         .WithMany("Rooms")
-                        .HasForeignKey("AdminId1");
+                        .HasForeignKey("AdminId");
 
                     b.Navigation("Admin");
                 });

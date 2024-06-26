@@ -1,4 +1,4 @@
-﻿namespace ChatApp_BE.ViewModels
+﻿namespace ChatApp_BE.ViewModels.ManageViewModel
 {
     public class DeleteUserViewModel
     {
