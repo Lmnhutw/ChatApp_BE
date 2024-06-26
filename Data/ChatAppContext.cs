@@ -30,13 +30,13 @@ public partial class ChatAppContext : IdentityDbContext<ApplicationUser>
     {
         base.OnModelCreating(builder);
         builder.Entity<RoomUser>().HasKey(ru => new { ru.RoomId, ru.Id });
-        //foreach (var entityType in builder.Model.GetEntityTypes())
-        //{
-        //    var tableName = entityType.GetTableName();
-        //    if (tableName.StartsWith("AspNet"))
-        //    {
-        //        entityType.SetTableName(tableName.Substring(6));
-        //    }
-        //}
+        foreach (var entityType in builder.Model.GetEntityTypes())
+        {
+            var tableName = entityType.GetTableName();
+            if (tableName.StartsWith("AspNet"))
+            {
+                entityType.SetTableName(tableName.Substring(6));
+            }
+        }
     }
 }

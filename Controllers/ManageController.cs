@@ -1,5 +1,5 @@
 ﻿using ChatApp_BE.Models;
-using ChatApp_BE.ViewModels;
+using ChatApp_BE.ViewModels.ManageViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
