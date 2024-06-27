@@ -5,6 +5,7 @@ using ChatApp_BE.ViewModels;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using ChatApp_BE.Data;
+using SendGrid.Helpers.Mail;
 
 namespace ChatApp_BE.Controllers
 {
@@ -28,20 +29,16 @@ namespace ChatApp_BE.Controllers
                                          .Include(m => m.Room)
                                          .ToListAsync();
 
-            var messageViewModels = new List<MessageViewModel>();
-            foreach (var message in messages)
+            var messageViewModels = messages.Select(message => new MessageViewModel
             {
-                messageViewModels.Add(new MessageViewModel
-                {
-                    MessageId = message.MessageId,
-                    Content = message.Content,
-                    Timestamp = message.Timestamp,
-                    UserId = message.Id,
-                    UserName = message.User.FullName,
-                    RoomId = message.RoomId,
-                    RoomName = message.Room.Name
-                });
-            }
+                MessageId = message.MessageId,
+                Content = message.Content,
+                Timestamp = message.Timestamp,
+                UserId = message.User.Id,
+                UserName = message.User.FullName,
+                RoomId = message.RoomId,
+                RoomName = message.Room.Name
+            }).ToList();
 
             return Ok(messageViewModels);
         }

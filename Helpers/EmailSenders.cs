@@ -26,6 +26,7 @@ namespace ChatApp_BE.Helpers
             //var htmlContent = message;
             var templateId = _configuration["SendGrid:TemplateId"];
             var templateData = new Dictionary<string, object>
+
             {
                 {"TKey1", "TValue1" },
             };

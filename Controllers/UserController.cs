@@ -63,33 +63,13 @@ namespace ChatApp_BE.Controllers
                 var result = await _userManager.CreateAsync(user, model.Password);
                 if (result.Succeeded)
                 {
-                    var userId = await _userManager.GetUserIdAsync(user);
-                    var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                    code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-                    user.EmailConfirmationToken = code;
-                    await _userManager.UpdateAsync(user);
-                    user.EmailConfirmed = true;
-
-                    //var confirmationLink = Url.Action(
-                    //    nameof(ConfirmEmail),
-                    //    "ApplicationUser",
-                    //    new
-                    //    {
-                    //        userId = user.Id,
-                    //        token = code
-                    //    },
-                    //    Request.Scheme
-                    //    );
-                    //await _emailSender.SendEmailAsync("Confirm your email",
-                    //    model.Email,
-                    //    $"Please confirm your email by clicking <a href='{HtmlEncoder.Default.Encode(confirmationLink)}'>here</a>.");
-
-                    //return Ok(new { Message = "Registration successful! Please check your email to confirm your account." });
+                    return Ok(new { Message = "Registration successful! Please check your email to confirm your account." });
                 }
 
                 foreach (var error in result.Errors)
                 {
                     ModelState.AddModelError(string.Empty, error.Description);
+                    return BadRequest("");
                 }
             }
 
@@ -98,13 +78,8 @@ namespace ChatApp_BE.Controllers
 
         [AllowAnonymous]
         [HttpGet("confirmemail")]
-        public async Task<IActionResult> ConfirmEmail(string userId, string token)
+        public async Task<IActionResult> ConfirmEmail(string userId, string token, string Email)
         {
-            if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(token))
-            {
-                return BadRequest("UserId and token must be provided.");
-            }
-
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null && user.EmailConfirmationToken != token)
             {
@@ -112,6 +87,23 @@ namespace ChatApp_BE.Controllers
             }
 
             // Confirm the email
+            userId = await _userManager.GetUserIdAsync(user);
+            var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+            user.EmailConfirmationToken = code;
+            //await _userManager.UpdateAsync(user);
+            var confirmationLink = Url.ActionLink(nameof(ConfirmEmail), "ApplicationUser",
+            new
+            {
+                userId = user.Id,
+                code = token
+            },
+            Request.Scheme
+            );
+            await _emailSender.SendEmailAsync("Confirm your email",
+                Email,
+                $"Please confirm your email by clicking <a href='{HtmlEncoder.Default.Encode(confirmationLink)}'>here</a>.");
+
             var result = await _userManager.ConfirmEmailAsync(user, token);
             if (result.Succeeded)
             {
@@ -133,10 +125,10 @@ namespace ChatApp_BE.Controllers
                 if (ModelState.IsValid)
                 {
                     var user = await _userManager.FindByEmailAsync(model.Email);
-                    if (!user.EmailConfirmed)
-                    {
-                        return BadRequest("Email is not confirmed.");
-                    }
+                    //if (!user.EmailConfirmed)
+                    //{
+                    //    return BadRequest("Email is not confirmed.");
+                    //}
                     if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
                     {
                         return Unauthorized("Invalid login attempt.");
@@ -152,14 +144,14 @@ namespace ChatApp_BE.Controllers
                         new Claim(ClaimTypes.Name, user.UserName),
                         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
                             }),
-                            Expires = DateTime.UtcNow.AddDays(7),
+                            Expires = DateTime.UtcNow.AddDays(14),
                             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
                         };
 
                         var token = tokenHandler.CreateToken(tokenDescriptor);
                         var tokenString = tokenHandler.WriteToken(token);
 
-                        //return Ok(new { Token = tokenString });
+                        return Ok(new { Token = tokenString });
                     }
                     return Ok("Login successful!");
                 }
