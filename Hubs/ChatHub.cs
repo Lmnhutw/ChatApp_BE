@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using ChatApp_BE.Services;
 using ChatApp_BE.Models;
 using ChatApp_BE.ViewModels;
-using Microsoft.AspNetCore.Identity;
+using System;
 
 namespace ChatApp_BE.Hubs
 {
@@ -24,20 +24,19 @@ namespace ChatApp_BE.Hubs
             {
                 Content = model.Content,
                 Id = model.UserId,
-                RoomId = model.RoomId
+                RoomId = model.RoomId,
+                Timestamp = DateTime.UtcNow
             };
 
             // Save message to the database
             await _messageService.SaveMessageAsync(msg);
 
             // Send message to all clients in the room
-            await Clients.Group((model.RoomId).ToString()).SendAsync("ReceiveMessage", model.FullName, model.Content);
+            await Clients.Group(model.RoomId.ToString()).SendAsync("ReceiveMessage", model.FullName, model.Content, msg.Timestamp);
         }
 
         public async Task JoinRoom(int roomId)
         {
-            await Clients.All
-                .SendAsync("ReceiveMessage", "admin", $"{Context.ConnectionId} Has joined ");
             await Groups.AddToGroupAsync(Context.ConnectionId, roomId.ToString());
             await Clients.Group(roomId.ToString()).SendAsync("ShowWho", $"{Context.ConnectionId} joined the room.");
         }
@@ -47,23 +46,5 @@ namespace ChatApp_BE.Hubs
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId.ToString());
             await Clients.Group(roomId.ToString()).SendAsync("ShowWho", $"{Context.ConnectionId} left the room.");
         }
-
-        //public async Task AddUserToRoom(int roomId, int userId, string role)
-        //{
-        //    await _roomService.AddUserToRoomAsync(roomId, userId, role);
-        //    await Clients.Group(roomId.ToString()).SendAsync("UserAdded", userId, role);
-        //}
-
-        //public async Task RemoveUserFromRoom(int roomId, int userId)
-        //{
-        //    await _roomService.RemoveUserFromRoomAsync(roomId, userId);
-        //    await Clients.Group(roomId.ToString()).SendAsync("UserRemoved", userId);
-        //}
-
-        //public async Task SetUserRole(int roomId, int userId, string role)
-        //{
-        //    await _roomService.SetUserRoleAsync(roomId, userId, role);
-        //    await Clients.Group(roomId.ToString()).SendAsync("UserRoleUpdated", userId, role);
-        //}
     }
 }

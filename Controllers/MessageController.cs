@@ -5,7 +5,7 @@ using ChatApp_BE.ViewModels;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using ChatApp_BE.Data;
-using SendGrid.Helpers.Mail;
+using System.Linq;
 
 namespace ChatApp_BE.Controllers
 {
@@ -25,9 +25,9 @@ namespace ChatApp_BE.Controllers
         public async Task<ActionResult<IEnumerable<MessageViewModel>>> GetMessages()
         {
             var messages = await _cxt.Messages
-                                         .Include(m => m.User)
-                                         .Include(m => m.Room)
-                                         .ToListAsync();
+                                     .Include(m => m.User)
+                                     .Include(m => m.Room)
+                                     .ToListAsync();
 
             var messageViewModels = messages.Select(message => new MessageViewModel
             {
@@ -35,7 +35,7 @@ namespace ChatApp_BE.Controllers
                 Content = message.Content,
                 Timestamp = message.Timestamp,
                 UserId = message.User.Id,
-                UserName = message.User.FullName,
+                DisplayName = message.User.FullName,
                 RoomId = message.RoomId,
                 RoomName = message.Room.Name
             }).ToList();
@@ -48,9 +48,9 @@ namespace ChatApp_BE.Controllers
         public async Task<ActionResult<MessageViewModel>> GetMessage(int id)
         {
             var message = await _cxt.Messages
-                                        .Include(m => m.User)
-                                        .Include(m => m.Room)
-                                        .FirstOrDefaultAsync(m => m.MessageId == id);
+                                     .Include(m => m.User)
+                                     .Include(m => m.Room)
+                                     .FirstOrDefaultAsync(m => m.MessageId == id);
 
             if (message == null)
             {
@@ -62,8 +62,8 @@ namespace ChatApp_BE.Controllers
                 MessageId = message.MessageId,
                 Content = message.Content,
                 Timestamp = message.Timestamp,
-                UserId = message.Id,
-                UserName = message.User.FullName,
+                UserId = message.User.Id,
+                DisplayName = message.User.FullName,
                 RoomId = message.RoomId,
                 RoomName = message.Room.Name
             };
@@ -78,9 +78,9 @@ namespace ChatApp_BE.Controllers
             var message = new Message
             {
                 Content = messageViewModel.Content,
-                Timestamp = messageViewModel.Timestamp,
+                Timestamp = DateTime.UtcNow, // Ensure correct timestamp
                 RoomId = messageViewModel.RoomId,
-                Id = messageViewModel.UserId
+                Id = messageViewModel.UserId,
             };
 
             _cxt.Messages.Add(message);
@@ -105,7 +105,7 @@ namespace ChatApp_BE.Controllers
             }
 
             message.Content = messageViewModel.Content;
-            message.Timestamp = messageViewModel.Timestamp;
+            message.Timestamp = DateTime.UtcNow; // Ensure correct timestamp
             message.RoomId = messageViewModel.RoomId;
             message.Id = messageViewModel.UserId;
 
@@ -130,21 +130,21 @@ namespace ChatApp_BE.Controllers
             return NoContent();
         }
 
-        // DELETE: api/Message/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteMessage(int id)
-        {
-            var message = await _cxt.Messages.FindAsync(id);
-            if (message == null)
-            {
-                return NotFound();
-            }
+        //// DELETE: api/Message/5
+        //[HttpDelete("{id}")]
+        //public async Task<IActionResult> DeleteMessage(MessageViewModel messageViewModel)
+        //{
+        //    var message = await _cxt.Messages.FindAsync(Content);
+        //    if (message == null)
+        //    {
+        //        return NotFound();
+        //    }
 
-            _cxt.Messages.Remove(message);
-            await _cxt.SaveChangesAsync();
+        //    _cxt.Messages.Remove(message);
+        //    await _cxt.SaveChangesAsync();
 
-            return NoContent();
-        }
+        //    return NoContent();
+        //}
 
         private bool MessageExists(int id)
         {
