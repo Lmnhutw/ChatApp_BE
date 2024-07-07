@@ -1,5 +1,6 @@
 ﻿using ChatApp_BE.Data;
 using ChatApp_BE.Models;
+using Microsoft.EntityFrameworkCore;
 using System.Threading.Tasks;
 
 namespace ChatApp_BE.Services
@@ -15,8 +16,13 @@ namespace ChatApp_BE.Services
 
         public async Task SaveMessageAsync(Message message)
         {
-            _context.Messages.Add(message);
+            await _context.Messages.AddAsync(message);
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<List<Message>> GetMessageHistoryAsync()
+        {
+            return await _context.Messages.ToListAsync();
         }
     }
 }
