@@ -40,7 +40,6 @@ namespace ChatApp_BE.Hubs
             }
         }
 
-
         public async Task JoinRoom(int roomId)
         {
             try
@@ -68,42 +67,34 @@ namespace ChatApp_BE.Hubs
                 throw;
             }
         }
-        public async Task RetrieveMessageHistory()
-        {
-            // Retrieves the message history asynchronously from the message service
-            var messageHistory = await _messageService.GetMessageHistoryAsync();
 
-            // Sends the retrieved message history back to the calling client
-            await Clients.Caller.SendAsync("ReceiveMessageHistory", messageHistory);
+        public override async Task OnConnectedAsync()
+        {
+            try
+            {
+                Console.WriteLine("Client connected: " + Context.ConnectionId);
+                await base.OnConnectedAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in OnConnectedAsync: " + ex.Message);
+                throw;
+            }
         }
 
-
-        //public override async Task OnConnectedAsync()
-        //{
-        //    try
-        //    {
-        //        Console.WriteLine("Client connected: " + Context.ConnectionId);
-        //        await base.OnConnectedAsync();
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine("Error in OnConnectedAsync: " + ex.Message);
-        //        throw;
-        //    }
-        //}
-
-        //public override async Task OnDisconnectedAsync(Exception exception)
-        //{
-        //    try
-        //    {
-        //        Console.WriteLine("Client disconnected: " + Context.ConnectionId);
-        //        await base.OnDisconnectedAsync(exception);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine("Error in OnDisconnectedAsync: " + ex.Message);
-        //        throw;
-        //    }
-        //}
+        public override async Task OnDisconnectedAsync(Exception exception)
+        {
+            try
+            { 
+                Console.WriteLine("Client disconnected: " + Context.ConnectionId);
+                await base.OnDisconnectedAsync(exception);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in OnDisconnectedAsync: " + ex.Message);
+                throw;
+            }
+        }
     }
 }
+    

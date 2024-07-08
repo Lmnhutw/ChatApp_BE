@@ -12,7 +12,13 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.WebUtilities;
 using System.Text.Encodings.Web;
 using ChatApp_BE.ViewModels.AuthViewModel;
+<<<<<<< HEAD
+=======
+using ChatApp_BE.ViewModels.Tests;
 using SendGrid.Helpers.Mail.Model;
+using System.Net.Http;
+using Microsoft.Extensions.Configuration;
+>>>>>>> 21f9d6c (update emailSender, update Verify, adding Template, adding configure EmailSender)
 
 namespace ChatApp_BE.Controllers
 
@@ -20,18 +26,18 @@ namespace ChatApp_BE.Controllers
     [AllowAnonymous]
     [ApiController]
     [Route("api/[controller]")]
-    public class authController : ControllerBase
+    public class AuthController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IEmailSenders _emailSender;
-        private readonly ILogger<authController> _logger;
+        private readonly ILogger<AuthController> _logger;
         private readonly IConfiguration _config;
 
-        public authController(
+        public AuthController(
            UserManager<ApplicationUser> userManager,
            SignInManager<ApplicationUser> signInManager,
-           ILogger<authController> logger,
+           ILogger<AuthController> logger,
            IEmailSenders emailSender,
            IConfiguration configuration
            )
@@ -44,16 +50,17 @@ namespace ChatApp_BE.Controllers
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register(RegisterViewModel model, [FromServices] ILogger<authController> logger)
+<<<<<<< HEAD
+        public async Task<IActionResult> Register(RegisterViewModel model)
+=======
+        public async Task<IActionResult> Register(RegisterViewModel model, [FromServices] ILogger<authController> logger, [FromServices] IEmailSenders emailSender)
+>>>>>>> 21f9d6c (update emailSender, update Verify, adding Template, adding configure EmailSender)
         {
-            logger.LogInformation("Starting registration for email: {Email}", model.Email);
-
             if (ModelState.IsValid)
             {
                 var user = await _userManager.FindByEmailAsync(model.Email);
                 if (user != null && await _userManager.IsEmailConfirmedAsync(user))
                 {
-                    logger.LogWarning("Email already used: {Email}", model.Email);
                     return BadRequest("Email was already used.");
                 }
 
@@ -67,6 +74,9 @@ namespace ChatApp_BE.Controllers
                 var result = await _userManager.CreateAsync(user, model.Password);
                 if (result.Succeeded)
                 {
+<<<<<<< HEAD
+                    return Ok(new { Message = "Registration successful! Please check your email to confirm your account." });
+=======
                     var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
                     if (code == null)
                     {
@@ -83,6 +93,9 @@ namespace ChatApp_BE.Controllers
                         return StatusCode(500, "Failed to encode email confirmation token.");
                     }
 
+                    logger.LogInformation("Encoded email confirmation token for user: {UserId}", user.Id);
+
+                    // Save the token to the database
                     user.EmailConfirmationToken = code;
                     var updateResult = await _userManager.UpdateAsync(user);
                     if (!updateResult.Succeeded)
@@ -90,8 +103,6 @@ namespace ChatApp_BE.Controllers
                         logger.LogError("Failed to save email confirmation token for user: {UserId}", user.Id);
                         return StatusCode(500, "Failed to save email confirmation token.");
                     }
-
-                    logger.LogInformation("Encoded email confirmation token for user: {UserId}", user.Id);
 
                     var confirmationLink = Url.ActionLink(
                         nameof(ConfirmEmail), "auth",
@@ -104,75 +115,99 @@ namespace ChatApp_BE.Controllers
                         logger.LogError("Failed to generate confirmation link for user: {UserId}", user.Id);
                         return StatusCode(500, "Failed to generate confirmation link.");
                     }
-
+                    
                     logger.LogInformation("Generated confirmation link for user: {UserId}", user.Id);
+
+                    var emailContent = await _emailSender.GetEmailTemplate(user.FullName, confirmationLink);
 
                     try
                     {
                         await _emailSender.SendEmailAsync(
-                            model.Email,
-                            "Confirm your email",
-                            $"Please confirm your email by clicking <a href='{HtmlEncoder.Default.Encode(confirmationLink)}'>here</a>."
+                        "Confirm your email",
+                        model.Email,
+                        emailContent
                         );
-                        logger.LogInformation("Sent email confirmation link to: {Email}", model.Email);
+                        return Ok(new { Message = "Registration successful! Please check your email to confirm your account." });
                     }
-                    catch (Exception ex)
+                    catch (System.Exception ex)
                     {
-                        logger.LogError(ex, "Failed to send email to: {Email}", model.Email);
-                        return StatusCode(500, "Failed to send email.");
+                        return StatusCode(500, $"Internal server error: {ex.Message}");
                     }
-
-                    return Ok(new { Message = "Registration successful! Please check your email to confirm your account." });
+>>>>>>> 21f9d6c (update emailSender, update Verify, adding Template, adding configure EmailSender)
                 }
 
                 foreach (var error in result.Errors)
                 {
                     ModelState.AddModelError(string.Empty, error.Description);
-                    logger.LogError("Registration error: {ErrorDescription}", error.Description);
-                    return BadRequest($"{error.Description}");
+                    return BadRequest("");
                 }
             }
 
-            logger.LogWarning("Invalid model state for email: {Email}", model.Email);
             return BadRequest(ModelState);
         }
 
-
-
-
-
-        [AllowAnonymous]
-        [HttpGet("confirmemail")]
-        public async Task<IActionResult> ConfirmEmail(string userId, string token, [FromServices] ILogger<authController> logger)
+<<<<<<< HEAD
+=======
+        [HttpPost("send-test-email")]
+        public async Task<IActionResult> SendTestEmail([FromBody] TestEmailRequest request)
         {
-            logger.LogInformation("Attempting to confirm email for user: {UserId}", userId);
+            _logger.LogInformation("Received request to send test email to: {Email}", request.Email);
 
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user == null)
+            try
             {
-                logger.LogWarning("User not found: {UserId}", userId);
-                return BadRequest("Invalid userId or token.");
+                await _emailSender.SendEmailAsync("Test Email", request.Email, request.Message);
+                _logger.LogInformation("Test email sent successfully to: {Email}", request.Email);
+                return Ok("Test email sent successfully!");
             }
-
-            var decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token));
-            logger.LogInformation("Decoded token for user: {UserId}", userId);
-
-            var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
-            if (result.Succeeded)
+            catch (Exception ex)
             {
-                logger.LogInformation("Email confirmed successfully for user: {UserId}", user.Id);
-                return Ok("Email confirmed successfully!");
-            }
-            else
-            {
-                logger.LogWarning("Email confirmation failed for user: {UserId}", user.Id);
-                return BadRequest("Email confirmation failed.");
+                _logger.LogError(ex, "Failed to send test email to: {Email}", request.Email);
+                return StatusCode(500, "Failed to send test email.");
             }
         }
 
+>>>>>>> 21f9d6c (update emailSender, update Verify, adding Template, adding configure EmailSender)
+        [AllowAnonymous]
+        [HttpGet("confirmemail")]
+        public async Task<IActionResult> ConfirmEmail(string userId, string token, string Email)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null && user.EmailConfirmationToken != token)
+            {
+                return BadRequest($"Invalid userId or token.");
+            }
 
+            // Confirm the email
+            userId = await _userManager.GetUserIdAsync(user);
+            var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+            user.EmailConfirmationToken = code;
+            //await _userManager.UpdateAsync(user);
+            var confirmationLink = Url.ActionLink(nameof(ConfirmEmail), "ApplicationUser",
+            new
+            {
+                userId = user.Id,
+                code = token
+            },
+            Request.Scheme
+            );
+            await _emailSender.SendEmailAsync("Confirm your email",
+                Email,
+                $"Please confirm your email by clicking <a href='{HtmlEncoder.Default.Encode(confirmationLink)}'>here</a>.");
 
-        [Authorize]
+            var result = await _userManager.ConfirmEmailAsync(user, token);
+            if (result.Succeeded)
+            {
+                // Clear the EmailConfirmationToken once confirmed
+                user.EmailConfirmationToken = null;
+                await _userManager.UpdateAsync(user);
+
+                return Ok("Email confirmed successfully!");
+            }
+
+            return BadRequest("Email confirmation failed.");
+        }
+
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginViewModel model)
         {
@@ -204,10 +239,10 @@ namespace ChatApp_BE.Controllers
                             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
                         };
 
-                        //var token = tokenHandler.CreateToken(tokenDescriptor);
-                        //var tokenString = tokenHandler.WriteToken(token);
+                        var token = tokenHandler.CreateToken(tokenDescriptor);
+                        var tokenString = tokenHandler.WriteToken(token);
 
-                        //return Ok(new { Token = tokenString });
+                        return Ok(new { Token = tokenString });
                     }
                     return Ok("Login successful!");
                 }
