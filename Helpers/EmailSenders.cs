@@ -7,7 +7,7 @@ using System.Net.Mail;
 =======
 ﻿using Azure;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.Web.CodeGenerators.Mvc.Templates.BlazorIdentity.Pages.Manage;
 using SendGrid;
 using SendGrid.Helpers.Mail;
 using System;
@@ -70,7 +70,6 @@ namespace ChatApp_BE.Helpers
             var response = await client.SendEmailAsync(msg);
 =======
 
-            try
             {
                 var response = await client.SendEmailAsync(msg);
 
