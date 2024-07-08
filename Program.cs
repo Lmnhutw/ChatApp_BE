@@ -4,6 +4,7 @@ using ChatApp_BE.Helpers;
 using ChatApp_BE.Hubs;
 using ChatApp_BE.Mappings;
 using ChatApp_BE.Models;
+using ChatApp_BE.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -22,6 +23,11 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Register MessageService and RoomService
+builder.Services.AddScoped<MessageService>();
+builder.Services.AddScoped<RoomService>();
+builder.Services.AddScoped<UserService>();
+
 //Configure Entity Framework Core
 builder.Services.AddDbContext<ChatAppContext>(options =>
 {
@@ -35,6 +41,19 @@ builder.Services.AddDbContext<ChatAppContext>(options =>
         Console.WriteLine("Something went wrong when connecting to DB");
     }
 });
+//Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ChatApp",
+        builder =>
+        {
+            builder.WithOrigins("http://localhost:3000")
+                   .AllowAnyMethod()
+                   .AllowAnyHeader()
+                   .AllowCredentials();
+        });
+});
+
 
 // Register AutoMapper
 builder.Services.AddAutoMapper(typeof(UserProfile));
@@ -86,11 +105,14 @@ else
 
 app.UseHttpsRedirection();
 
+//Add CORS
+app.UseCors("ChatApp");
+
 // Add authentication middleware
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHub<ChatHub>("/chatHub");
+app.MapHub<ChatHub>("/hub");
 
 app.Run();
