@@ -62,8 +62,7 @@ builder.Services.AddCors(options =>
 // Register AutoMapper
 builder.Services.AddAutoMapper(typeof(UserProfile));
 
-// Register Email Sender
-builder.Services.AddScoped<IEmailSenders>();
+
 //builder.Services.Configure<AuthMessageSenderOptions>(builder.Configuration);
 
 // Configure Identity

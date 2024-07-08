@@ -1,92 +1,22 @@
-<<<<<<< HEAD
-﻿using Microsoft.Extensions.Configuration;
-using Microsoft.VisualStudio.Web.CodeGenerators.Mvc.Templates.BlazorIdentity.Pages.Manage;
-using SendGrid;
-using SendGrid.Helpers.Mail;
-using System.Net.Mail;
-=======
-﻿using Azure;
-using Microsoft.Extensions.Configuration;
-using Microsoft.VisualStudio.Web.CodeGenerators.Mvc.Templates.BlazorIdentity.Pages.Manage;
-using SendGrid;
-using SendGrid.Helpers.Mail;
-using System;
 using System.Net.Http;
->>>>>>> 21f9d6c (update emailSender, update Verify, adding Template, adding configure EmailSender)
-using System.Threading.Tasks;
-using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using SendGrid;
+using SendGrid.Helpers.Mail;
 
 namespace ChatApp_BE.Helpers
 {
     public class IEmailSenders
     {
         private readonly IConfiguration _configuration;
-<<<<<<< HEAD
-=======
+        private readonly HttpClient _httpClient;
         private readonly ILogger<IEmailSenders> _logger;
-       
->>>>>>> 21f9d6c (update emailSender, update Verify, adding Template, adding configure EmailSender)
 
-        public IEmailSenders(IConfiguration configuration)
+        public IEmailSenders(IConfiguration configuration, HttpClient httpClient, ILogger<IEmailSenders> logger)
         {
             _configuration = configuration;
-<<<<<<< HEAD
-=======
+            _httpClient = httpClient;
             _logger = logger;
-            
-           
->>>>>>> 21f9d6c (update emailSender, update Verify, adding Template, adding configure EmailSender)
-        }
-
-        public async Task SendEmailAsync(string subject, string toEmail, string message)
-        {
-            _logger.LogInformation("Attempting to send email to {ToEmail} with subject {Subject}", toEmail, subject);
-
-            var apiKey = _configuration["SendGrid:ApiSenderKey"];
-<<<<<<< HEAD
-=======
-            if (string.IsNullOrEmpty(apiKey))
-            {
-                _logger.LogError("SendGrid API key is not configured.");
-                throw new InvalidOperationException("SendGrid API key is not configured.");
-            }
-
-            _logger.LogInformation("SendGrid API key retrieved successfully.");
-
->>>>>>> 21f9d6c (update emailSender, update Verify, adding Template, adding configure EmailSender)
-            var client = new SendGridClient(apiKey);
-            var from = new EmailAddress("minhnhut.services.test@gmail.com", "ChatJoy");
-            var to = new EmailAddress(toEmail);
-            //var plainTextContent = message;
-            //var htmlContent = message;
-            var templateId = _configuration["SendGrid:TemplateId"];
-            var templateData = new Dictionary<string, object>
-
-<<<<<<< HEAD
-            {
-                {"TKey1", "TValue1" },
-            };
-            var msg = MailHelper.CreateSingleTemplateEmail(from, to, templateId, templateData);
-            var response = await client.SendEmailAsync(msg);
-=======
-
-            {
-                var response = await client.SendEmailAsync(msg);
-
-                if (response.StatusCode != System.Net.HttpStatusCode.Accepted)
-                {
-                    var responseBody = await response.Body.ReadAsStringAsync();
-                    throw new System.Exception($"Failed to send email. StatusCode: {response.StatusCode}, ResponseBody: {responseBody}");
-                }
-
-                _logger.LogInformation("Email sent successfully to {Email}", toEmail);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception occurred while sending email to {Email}", toEmail);
-                throw;
-            }
->>>>>>> 21f9d6c (update emailSender, update Verify, adding Template, adding configure EmailSender)
         }
 
         public async Task<string> GetEmailTemplate(string fullName, string confirmationLink)
@@ -96,7 +26,14 @@ namespace ChatApp_BE.Helpers
             var unsubscribeLink = _configuration["EmailSettings:UnsubscribeLink"];
             var unsubscribePreferencesLink = _configuration["EmailSettings:UnsubscribePreferencesLink"];
 
-            var htmlTemplatePath = Path.Combine(Directory.GetCurrentDirectory(),"Helpers", "Template", "emailTemplate.html");
+            var basePath = AppDomain.CurrentDomain.BaseDirectory;
+            var htmlTemplatePath = Path.Combine(basePath, "Helpers", "Template", "emailTemplate.html");
+
+            if (!File.Exists(htmlTemplatePath))
+            {
+                throw new FileNotFoundException($"The template file was not found at path: {htmlTemplatePath}");
+            }
+
             var htmlTemplate = await File.ReadAllTextAsync(htmlTemplatePath);
 
             var template = htmlTemplate.Replace("{{fullName}}", fullName)
@@ -108,5 +45,44 @@ namespace ChatApp_BE.Helpers
 
             return template;
         }
+
+        public async Task SendEmailAsync(string subject, string toEmail, string message)
+        {
+            var apiKey = _configuration["SendGrid:ApiSenderKey"];
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                _logger.LogError("SendGrid API key is not configured.");
+                throw new System.Exception("SendGrid API key is not configured.");
+            }
+
+            var client = new SendGridClient(apiKey);
+            var from = new EmailAddress("minhnhut.services.test@gmail.com", "ChatJoy");
+            var to = new EmailAddress(toEmail);
+            var plainTextContent = message;
+            var htmlContent = message;
+            var msg = MailHelper.CreateSingleEmail(from, to, subject, plainTextContent, htmlContent);
+
+            try
+            {
+                var response = await client.SendEmailAsync(msg);
+                var responseBody = await response.Body.ReadAsStringAsync();
+
+                _logger.LogInformation("SendGrid response status code: {StatusCode}", response.StatusCode);
+                _logger.LogInformation("SendGrid response body: {ResponseBody}", responseBody);
+
+                if (response.StatusCode != System.Net.HttpStatusCode.Accepted)
+                {
+                    throw new System.Exception($"Failed to send email. StatusCode: {response.StatusCode}, ResponseBody: {responseBody}");
+                }
+
+                _logger.LogInformation("Email sent successfully to {Email}", toEmail);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception occurred while sending email to {Email}", toEmail);
+                throw;
+            }
+        }
+
     }
 }
