@@ -12,7 +12,10 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.WebUtilities;
 using System.Text.Encodings.Web;
 using ChatApp_BE.ViewModels.AuthViewModel;
+using ChatApp_BE.ViewModels.Tests;
 using SendGrid.Helpers.Mail.Model;
+using System.Net.Http;
+using Microsoft.Extensions.Configuration;
 
 namespace ChatApp_BE.Controllers
 
@@ -44,7 +47,7 @@ namespace ChatApp_BE.Controllers
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register(RegisterViewModel model, [FromServices] ILogger<authController> logger)
+        public async Task<IActionResult> Register(RegisterViewModel model, [FromServices] ILogger<authController> logger, [FromServices] IEmailSenders emailSender)
         {
             logger.LogInformation("Starting registration for email: {Email}", model.Email);
 
@@ -83,6 +86,9 @@ namespace ChatApp_BE.Controllers
                         return StatusCode(500, "Failed to encode email confirmation token.");
                     }
 
+                    logger.LogInformation("Encoded email confirmation token for user: {UserId}", user.Id);
+
+                    // Save the token to the database
                     user.EmailConfirmationToken = code;
                     var updateResult = await _userManager.UpdateAsync(user);
                     if (!updateResult.Succeeded)
@@ -90,8 +96,6 @@ namespace ChatApp_BE.Controllers
                         logger.LogError("Failed to save email confirmation token for user: {UserId}", user.Id);
                         return StatusCode(500, "Failed to save email confirmation token.");
                     }
-
-                    logger.LogInformation("Encoded email confirmation token for user: {UserId}", user.Id);
 
                     var confirmationLink = Url.ActionLink(
                         nameof(ConfirmEmail), "auth",
@@ -104,25 +108,24 @@ namespace ChatApp_BE.Controllers
                         logger.LogError("Failed to generate confirmation link for user: {UserId}", user.Id);
                         return StatusCode(500, "Failed to generate confirmation link.");
                     }
-
+                    
                     logger.LogInformation("Generated confirmation link for user: {UserId}", user.Id);
+
+                    var emailContent = await _emailSender.GetEmailTemplate(user.FullName, confirmationLink);
 
                     try
                     {
                         await _emailSender.SendEmailAsync(
-                            model.Email,
-                            "Confirm your email",
-                            $"Please confirm your email by clicking <a href='{HtmlEncoder.Default.Encode(confirmationLink)}'>here</a>."
+                        "Confirm your email",
+                        model.Email,
+                        emailContent
                         );
-                        logger.LogInformation("Sent email confirmation link to: {Email}", model.Email);
+                        return Ok(new { Message = "Registration successful! Please check your email to confirm your account." });
                     }
-                    catch (Exception ex)
+                    catch (System.Exception ex)
                     {
-                        logger.LogError(ex, "Failed to send email to: {Email}", model.Email);
-                        return StatusCode(500, "Failed to send email.");
+                        return StatusCode(500, $"Internal server error: {ex.Message}");
                     }
-
-                    return Ok(new { Message = "Registration successful! Please check your email to confirm your account." });
                 }
 
                 foreach (var error in result.Errors)
@@ -137,9 +140,23 @@ namespace ChatApp_BE.Controllers
             return BadRequest(ModelState);
         }
 
+        [HttpPost("send-test-email")]
+        public async Task<IActionResult> SendTestEmail([FromBody] TestEmailRequest request)
+        {
+            _logger.LogInformation("Received request to send test email to: {Email}", request.Email);
 
-
-
+            try
+            {
+                await _emailSender.SendEmailAsync("Test Email", request.Email, request.Message);
+                _logger.LogInformation("Test email sent successfully to: {Email}", request.Email);
+                return Ok("Test email sent successfully!");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send test email to: {Email}", request.Email);
+                return StatusCode(500, "Failed to send test email.");
+            }
+        }
 
         [AllowAnonymous]
         [HttpGet("confirmemail")]
