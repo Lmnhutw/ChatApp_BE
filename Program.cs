@@ -18,7 +18,7 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register services to the container.
+// Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -27,10 +27,6 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<MessageService>();
 builder.Services.AddScoped<RoomService>();
 builder.Services.AddScoped<UserService>();
-
-// Register EmailSenders
-builder.Services.AddHttpClient();
-builder.Services.AddScoped<IEmailSenders>();
 
 //Configure Entity Framework Core
 builder.Services.AddDbContext<ChatAppContext>(options =>
