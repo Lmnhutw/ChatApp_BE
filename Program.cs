@@ -32,6 +32,8 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IEmailSenders>();
 
+
+
 //Configure Entity Framework Core
 builder.Services.AddDbContext<ChatAppContext>(options =>
 {
@@ -88,6 +90,12 @@ builder.Services.AddAuthentication(options =>
             ValidateAudience = false
         };
     });
+
+// Add secure Api Key
+var SenderApiKey = builder.Configuration["SendGrid:ApiSenderKey"];
+var JwtApiKey = builder.Configuration["JwtKey:SecretKey"];
+
+
 
 // Configure SignalR
 builder.Services.AddSignalR();
