@@ -1,24 +1,14 @@
-﻿using ChatApp_BE.Models;
-using ChatApp_BE.Helpers;
+﻿using ChatApp_BE.Helpers;
+using ChatApp_BE.Models;
+using ChatApp_BE.ViewModels.AuthViewModel;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.IdentityModel.Tokens;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity.UI.Services;
-using Microsoft.AspNetCore.WebUtilities;
-using System.Text.Encodings.Web;
-using ChatApp_BE.ViewModels.AuthViewModel;
-
-using ChatApp_BE.ViewModels.Tests;
-using SendGrid.Helpers.Mail.Model;
-using System.Net.Http;
-using Microsoft.Extensions.Configuration;
-using Azure.Core;
-
 
 namespace ChatApp_BE.Controllers
 
@@ -69,7 +59,6 @@ namespace ChatApp_BE.Controllers
 
                 var result = await _userManager.CreateAsync(user, model.Password);
 
-
                 _logger.LogInformation(" response status code: {result}", result);
                 if (result.Succeeded)
                 {
@@ -81,7 +70,6 @@ namespace ChatApp_BE.Controllers
                         new { userId = user.Id, token = code },
                         Request.Scheme
                     );
-                    
 
                     var emailContent = await _emailSender.GetEmailTemplate(user.FullName, confirmationLink);
                     await _emailSender.SendEmailAsync(
@@ -158,7 +146,6 @@ namespace ChatApp_BE.Controllers
             }
             return Ok(user);
         }
-
 
         [AllowAnonymous]
         [HttpGet("confirmemail")]

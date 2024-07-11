@@ -1,19 +1,13 @@
-﻿using AutoMapper;
-using ChatApp_BE.Data;
+﻿using ChatApp_BE.Data;
 using ChatApp_BE.Helpers;
 using ChatApp_BE.Hubs;
 using ChatApp_BE.Mappings;
 using ChatApp_BE.Models;
 using ChatApp_BE.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.IdentityModel.Tokens;
-using System.Configuration;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -31,8 +25,6 @@ builder.Services.AddScoped<UserService>();
 // Register EmailSenders
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IEmailSenders>();
-
-
 
 //Configure Entity Framework Core
 builder.Services.AddDbContext<ChatAppContext>(options =>
@@ -60,10 +52,8 @@ builder.Services.AddCors(options =>
         });
 });
 
-
 // Register AutoMapper
 builder.Services.AddAutoMapper(typeof(UserProfile));
-
 
 //builder.Services.Configure<AuthMessageSenderOptions>(builder.Configuration);
 
@@ -94,8 +84,6 @@ builder.Services.AddAuthentication(options =>
 // Add secure Api Key
 var SenderApiKey = builder.Configuration["SendGrid:ApiSenderKey"];
 var JwtApiKey = builder.Configuration["JwtKey:SecretKey"];
-
-
 
 // Configure SignalR
 builder.Services.AddSignalR();

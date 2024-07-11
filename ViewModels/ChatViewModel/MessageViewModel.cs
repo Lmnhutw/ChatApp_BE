@@ -1,6 +1,4 @@
-﻿using ChatApp_BE.Models;
-
-public class MessageViewModel
+﻿public class MessageViewModel
 {
     public int MessageId { get; set; }
     public string UserId { get; set; }

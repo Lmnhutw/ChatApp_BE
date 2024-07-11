@@ -1,6 +1,3 @@
-using System.Net.Http;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using SendGrid;
 using SendGrid.Helpers.Mail;
 
@@ -83,6 +80,5 @@ namespace ChatApp_BE.Helpers
                 throw;
             }
         }
-
     }
 }
