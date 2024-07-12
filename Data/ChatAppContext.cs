@@ -1,15 +1,6 @@
 ﻿using ChatApp_BE.Models;
-using Microsoft.EntityFrameworkCore;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
-using System.Collections.Generic;
-
-using ChatApp_BE.Models;
-using Microsoft.EntityFrameworkCore;
-
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
-using Microsoft.AspNetCore.Identity;
-using System.Reflection;
-using System.Reflection.Emit;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChatApp_BE.Data;
 

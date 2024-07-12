@@ -1,6 +1,5 @@
 ﻿using AutoMapper;
 using ChatApp_BE.Models;
-using ChatApp_BE.ViewModels;
 
 public class RoomProfile : Profile
 {

@@ -1,6 +1,4 @@
-﻿using ChatApp_BE.Models;
-
-public class RoomViewModel
+﻿public class RoomViewModel
 {
     public int RoomId { get; set; }
     public string? RoomName { get; set; }

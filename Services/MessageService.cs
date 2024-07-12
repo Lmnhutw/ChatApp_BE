@@ -1,28 +1,35 @@
-﻿using ChatApp_BE.Data;
+﻿using Microsoft.Extensions.Logging;
 using ChatApp_BE.Models;
-using Microsoft.EntityFrameworkCore;
 using System.Threading.Tasks;
+using ChatApp_BE.Data;
 
 namespace ChatApp_BE.Services
 {
     public class MessageService
     {
         private readonly ChatAppContext _context;
+        private readonly ILogger<MessageService> _logger;
 
-        public MessageService(ChatAppContext context)
+        public MessageService(ILogger<MessageService> logger, ChatAppContext context)
         {
+            _logger = logger;
             _context = context;
         }
 
         public async Task SaveMessageAsync(Message message)
         {
-            await _context.Messages.AddAsync(message);
-            await _context.SaveChangesAsync();
-        }
-
-        public async Task<List<Message>> GetMessageHistoryAsync()
-        {
-            return await _context.Messages.ToListAsync();
+            try
+            {
+                _logger.LogInformation("Saving message: {Message}", message);
+                _context.Messages.Add(message);
+                await _context.SaveChangesAsync();
+                await Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving message: {Message}", message);
+                throw;
+            }
         }
     }
 }

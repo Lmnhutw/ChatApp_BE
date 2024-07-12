@@ -1,11 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using ChatApp_BE.Data;
 using ChatApp_BE.Models;
-using ChatApp_BE.ViewModels;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using ChatApp_BE.Data;
-using System.Linq;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChatApp_BE.Controllers
 {
