@@ -51,7 +51,20 @@ namespace ChatApp_BE.Hubs
         {
             try
             {
-                var chatMessage = new { sender = model.FullName, content = model.Content, timeStamp = model.Timestamp };
+                _logger.LogInformation("User {User} attempting to send messages {Content}", model.FullName, model.Content);
+
+                var chatMessage = new
+                {
+                    sender = model.FullName,
+                    content = model.Content,
+                    timeStamp = model.Timestamp
+                };
+                if (chatMessage is null)
+                {
+                    _logger.LogWarning("Messages can not be blank. Please type in!!!");
+                    throw new ArgumentException("Invalid Messages");
+                }
+
                 _logger.LogInformation("Sending message from {User} to room {Room}: {Message}", model.FullName, model.RoomName, model.Content);
                 await Clients.Group(model.RoomName).SendAsync("ReceiveMessage", chatMessage);
             }
