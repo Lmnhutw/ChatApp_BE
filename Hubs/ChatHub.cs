@@ -57,7 +57,7 @@ namespace ChatApp_BE.Hubs
                 {
                     sender = model.FullName,
                     content = model.Content,
-                    timeStamp = model.Timestamp
+                    timeStamp = model.Timestamp.ToString("hh:mm:tt:zzz")
                 };
                 if (chatMessage is null)
                 {
