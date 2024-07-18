@@ -39,7 +39,6 @@ namespace ChatApp_BE.Controllers
                     RoomId = r.RoomId,
                     RoomName = r.Name,
                     CreatedBy = r.CreatedBy,
-                    AdminName = r.Admin.FullName
                 })
                 .ToListAsync();
 
