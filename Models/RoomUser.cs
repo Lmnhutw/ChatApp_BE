@@ -7,6 +7,7 @@ public class RoomUser
     public string Id { get; set; } = string.Empty;
 
     public int RoomId { get; set; }
+    public string FullName { get; set; } = string.Empty;
     public bool IsMember { get; set; }
 
     [ForeignKey("RoomId")]

@@ -10,6 +10,7 @@ using ChatApp_BE.Data;
 using ChatApp_BE.Services;
 using SendGrid.Helpers.Mail;
 using System.Collections.Generic;
+using AutoMapper.Execution;
 
 namespace ChatApp_BE.Hubs
 {
@@ -35,11 +36,11 @@ namespace ChatApp_BE.Hubs
             try
             {
                 // Log the incoming RoomViewModel
+                // Log the incoming RoomViewModel
                 _logger.LogInformation("RoomViewModel: {@RoomViewModel}", model);
 
                 // Fetch the user who is creating the room
                 var user = await _context.Users.FirstOrDefaultAsync(u => u.FullName == model.CreatedBy);
-
                 // Check if the user exists and log the result
                 if (user == null)
                 {
@@ -50,44 +51,13 @@ namespace ChatApp_BE.Hubs
                 // Log the found user details
                 _logger.LogInformation("User: {@User}", user);
 
-                /* var room = new Room
-                {
-                    Name = model.RoomName,
-                    CreatedBy = user.UserName,  // Store username or any other identifier
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                // Add the room to the database context
-                _context.Rooms.Add(room);
-                await _context.SaveChangesAsync(); // Save changes to persist the room
-
-                // Now that the room is created, add the user as a member
-                var roomUser = new RoomUser
-                {
-                    Id = user.Id, // This is the ID of the user joining the room
-                    RoomId = room.RoomId,
-                    IsMember = true // Mark this user as a member
-                };
-
-                // Associate the user with the room
-                room.RoomUsers.Add(roomUser);
-                await _context.SaveChangesAsync(); // Save changes to persist the association
-
-                var roomViewModel = new RoomViewModel
-                {
-                    RoomId = room.RoomId,
-                    RoomName = room.Name,
-                    CreatedBy = room.CreatedBy,
-                    Members = new List<RoleUserViewModel>() // Populate as needed
-                }; */
-
                 // Create the room and log the details
                 var room = new Room
                 {
                     Name = model.RoomName,
                     CreatedBy = model.CreatedBy,
                     CreatedAt = DateTime.UtcNow,
-                    RoomId = model.RoomId,
+                    Id = user.Id // Set the UserId
                 };
 
                 _logger.LogInformation("Room to be created: {@Room}", room);
@@ -100,6 +70,7 @@ namespace ChatApp_BE.Hubs
                     RoomId = room.RoomId,
                     RoomName = room.Name,
                     CreatedBy = room.CreatedBy,
+                    UserId = user.Id, // Include the UserId
                     Members = new List<RoleUserViewModel>()
                 };
 
@@ -148,6 +119,8 @@ namespace ChatApp_BE.Hubs
                 {
                     RoomId = room.RoomId,
                     Id = user.Id,
+                    IsMember = true,
+                    FullName = user.FullName,
                 });
 
                 await _context.SaveChangesAsync();
