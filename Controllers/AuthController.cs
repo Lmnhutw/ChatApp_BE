@@ -185,35 +185,36 @@ namespace ChatApp_BE.Controllers
                 if (ModelState.IsValid)
                 {
                     var user = await _userManager.FindByEmailAsync(model.Email);
-                    //if (!user.EmailConfirmed)
-                    //{
-                    //    return BadRequest("Email is not confirmed.");
-                    //}
                     if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
                     {
                         return Unauthorized("Invalid login attempt.");
                     }
-                    else
+
+                    var tokenHandler = new JwtSecurityTokenHandler();
+                    var key = Encoding.UTF8.GetBytes(_config.GetSection("Jwt:SecretKey").Value);
+                    var tokenDescriptor = new SecurityTokenDescriptor
                     {
-                        var tokenHandler = new JwtSecurityTokenHandler();
-                        var key = Encoding.UTF8.GetBytes(_config.GetSection("Jwt:SecretKey").Value!);
-                        var tokenDescriptor = new SecurityTokenDescriptor
+                        Subject = new ClaimsIdentity(new Claim[]
                         {
-                            Subject = new ClaimsIdentity(new Claim[]
-                            {
-                        new Claim(ClaimTypes.Name, user.UserName),
-                        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
-                            }),
-                            Expires = DateTime.UtcNow.AddDays(14),
-                            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-                        };
+                    new Claim(ClaimTypes.Name, user.UserName),
+                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
+                        }),
+                        Expires = DateTime.UtcNow.AddDays(14),
+                        SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+                    };
 
-                        var token = tokenHandler.CreateToken(tokenDescriptor);
-                        var tokenString = tokenHandler.WriteToken(token);
+                    var token = tokenHandler.CreateToken(tokenDescriptor);
+                    var tokenString = tokenHandler.WriteToken(token);
+                    var userInfo = new
+                    {
+                        user.Id,
+                        user.Email,
+                        user.UserName,
+                        user.FullName,
+                        // user.ProfilePic // Include other user properties if available
+                    };
 
-                        //return Ok(new { Token = tokenString });
-                    }
-                    return Ok("Login successful!");
+                    return Ok(new { Token = tokenString, user = userInfo });
                 }
 
                 return BadRequest(ModelState);
@@ -222,6 +223,31 @@ namespace ChatApp_BE.Controllers
             {
                 return BadRequest(ex.Message);
             }
+        }
+
+        [HttpGet("GetUserById/{userId}")]
+        public async Task<IActionResult> GetUserById(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                return BadRequest("User not found.");
+            }
+            return Ok(new
+            {
+                user.Id,
+                user.Email,
+                user.UserName,
+                user.FullName, // Assuming FullName is a property in your ApplicationUser class
+                //user.ProfilePic // Assuming ProfilePic is a property in your ApplicationUser class
+            });
+        }
+
+        [Authorize]
+        [HttpGet("check")]
+        public IActionResult Check()
+        {
+            return Ok("User is authenticated");
         }
 
         [Authorize]

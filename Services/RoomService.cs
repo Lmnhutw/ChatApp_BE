@@ -30,7 +30,6 @@ namespace ChatApp_BE.Services
                 var room = new Room
                 {
                     Name = model.RoomName,
-                    FullName = model.AdminName,
                 };
 
                 _context.Rooms.Add(room);

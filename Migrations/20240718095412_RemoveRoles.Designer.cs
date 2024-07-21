@@ -4,6 +4,7 @@ using ChatApp_BE.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ChatApp_BE.Migrations
 {
     [DbContext(typeof(ChatAppContext))]
-    partial class ChatAppContextModelSnapshot : ModelSnapshot
+    [Migration("20240718095412_RemoveRoles")]
+    partial class RemoveRoles
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -143,21 +146,21 @@ namespace ChatApp_BE.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RoomId"));
 
+                    b.Property<string>("ApplicationUserId")
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
                     b.Property<string>("Name")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("RoomId");
 
-                    b.HasIndex("Id");
+                    b.HasIndex("ApplicationUserId");
 
                     b.ToTable("Rooms");
                 });
@@ -169,10 +172,6 @@ namespace ChatApp_BE.Migrations
 
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsMember")
                         .HasColumnType("bit");
@@ -336,11 +335,9 @@ namespace ChatApp_BE.Migrations
 
             modelBuilder.Entity("ChatApp_BE.Models.Room", b =>
                 {
-                    b.HasOne("ChatApp_BE.Models.ApplicationUser", "User")
+                    b.HasOne("ChatApp_BE.Models.ApplicationUser", null)
                         .WithMany("Rooms")
-                        .HasForeignKey("Id");
-
-                    b.Navigation("User");
+                        .HasForeignKey("ApplicationUserId");
                 });
 
             modelBuilder.Entity("ChatApp_BE.Models.RoomUser", b =>

@@ -6,21 +6,23 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ChatApp_BE.Controllers
 {
-    public class DeleteUser : ControllerBase
+    [ApiController]
+    [Route("api/[controller]")]
+    public class ManageUser : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly ILogger<DeleteUser> _logger;
+        private readonly ILogger<ManageUser> _logger;
 
-        public DeleteUser(
+        public ManageUser(
             UserManager<ApplicationUser> userManager,
-            ILogger<DeleteUser> logger)
+            ILogger<ManageUser> logger)
         {
             _userManager = userManager;
             _logger = logger;
         }
 
         [Authorize]
-        [HttpDelete("delete")]
+        [HttpDelete("DeleteUser")]
         public async Task<IActionResult> Delete(DeleteUserViewModel model)
         {
             if (string.IsNullOrEmpty(model.Email))

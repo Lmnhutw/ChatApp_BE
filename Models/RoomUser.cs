@@ -7,12 +7,8 @@ public class RoomUser
     public string Id { get; set; } = string.Empty;
 
     public int RoomId { get; set; }
-
-    public bool IsModerator { get; set; }
-
+    public string FullName { get; set; } = string.Empty;
     public bool IsMember { get; set; }
-
-    public bool IsAdmin { get; set; }
 
     [ForeignKey("RoomId")]
     public virtual Room Room { get; set; } = null!;
