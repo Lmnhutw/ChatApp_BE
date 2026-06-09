@@ -22,6 +22,8 @@ public interface IConversationService
 
     Task<ConversationServiceResult> GetMessagesAsync(Guid conversationId, string userId, DateTime? before, int take);
 
+    Task<ConversationServiceResult> SearchMessagesAsync(Guid conversationId, string userId, string query, int take);
+
     Task<ConversationServiceResult> SendMessageAsync(Guid conversationId, string userId, SendMessageRequest request);
 
     Task<ConversationServiceResult> UpdateMessageAsync(Guid conversationId, Guid messageId, string userId, UpdateMessageRequest request);
@@ -35,6 +37,12 @@ public interface IConversationService
     Task<ConversationServiceResult> AddMessageReactionAsync(Guid conversationId, Guid messageId, string userId, AddReactionRequest request);
 
     Task<ConversationServiceResult> RemoveMessageReactionAsync(Guid conversationId, Guid messageId, string userId, string reaction);
+
+    Task<ConversationServiceResult> GetMessageAttachmentsAsync(Guid conversationId, Guid messageId, string userId);
+
+    Task<ConversationServiceResult> AddMessageAttachmentAsync(Guid conversationId, Guid messageId, string userId, CreateAttachmentRequest request);
+
+    Task<ConversationServiceResult> DeleteMessageAttachmentAsync(Guid conversationId, Guid messageId, Guid attachmentId, string userId);
 }
 
 public sealed class ConversationServiceResult

@@ -78,6 +78,13 @@ public class ConversationsController : ControllerBase
         return ToActionResult(result);
     }
 
+    [HttpGet("{conversationId:guid}/messages/search")]
+    public async Task<IActionResult> SearchMessages(Guid conversationId, [FromQuery] string query, [FromQuery] int take = 50)
+    {
+        var result = await _conversationService.SearchMessagesAsync(conversationId, User.GetRequiredUserId(), query, take);
+        return ToActionResult(result);
+    }
+
     [HttpPost("{conversationId:guid}/messages")]
     public async Task<IActionResult> SendMessage(Guid conversationId, SendMessageRequest request)
     {
@@ -126,6 +133,27 @@ public class ConversationsController : ControllerBase
     public async Task<IActionResult> RemoveMessageReaction(Guid conversationId, Guid messageId, string reaction)
     {
         var result = await _conversationService.RemoveMessageReactionAsync(conversationId, messageId, User.GetRequiredUserId(), reaction);
+        return ToActionResult(result);
+    }
+
+    [HttpGet("{conversationId:guid}/messages/{messageId:guid}/attachments")]
+    public async Task<IActionResult> GetMessageAttachments(Guid conversationId, Guid messageId)
+    {
+        var result = await _conversationService.GetMessageAttachmentsAsync(conversationId, messageId, User.GetRequiredUserId());
+        return ToActionResult(result);
+    }
+
+    [HttpPost("{conversationId:guid}/messages/{messageId:guid}/attachments")]
+    public async Task<IActionResult> AddMessageAttachment(Guid conversationId, Guid messageId, CreateAttachmentRequest request)
+    {
+        var result = await _conversationService.AddMessageAttachmentAsync(conversationId, messageId, User.GetRequiredUserId(), request);
+        return ToActionResult(result);
+    }
+
+    [HttpDelete("{conversationId:guid}/messages/{messageId:guid}/attachments/{attachmentId:guid}")]
+    public async Task<IActionResult> DeleteMessageAttachment(Guid conversationId, Guid messageId, Guid attachmentId)
+    {
+        var result = await _conversationService.DeleteMessageAttachmentAsync(conversationId, messageId, attachmentId, User.GetRequiredUserId());
         return ToActionResult(result);
     }
 

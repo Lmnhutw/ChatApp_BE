@@ -72,6 +72,11 @@ public sealed class ConversationService : IConversationService
             return ConversationServiceResult.NotFound("User not found.");
         }
 
+        if (await HasBlockBetweenUsersAsync(userId, request.OtherUserId))
+        {
+            return ConversationServiceResult.Forbidden("Cannot create a conversation with this user.");
+        }
+
         var existingConversation = await _context.Conversations
             .Include(conversation => conversation.Members)
                 .ThenInclude(member => member.User)
@@ -294,6 +299,11 @@ public sealed class ConversationService : IConversationService
             return ConversationServiceResult.NotFound("Conversation not found.");
         }
 
+        if (await HasBlockedConversationMemberAsync(conversationId, userId))
+        {
+            return ConversationServiceResult.Forbidden("Cannot send messages in this conversation because of a user block.");
+        }
+
         if (request.ReplyToMessageId.HasValue)
         {
             var replyExists = await _context.ChatMessages.AnyAsync(message =>
@@ -324,6 +334,39 @@ public sealed class ConversationService : IConversationService
             .FirstAsync(chatMessage => chatMessage.Id == message.Id);
 
         return ConversationServiceResult.Success(ToMessageResponse(createdMessage));
+    }
+
+    public async Task<ConversationServiceResult> SearchMessagesAsync(Guid conversationId, string userId, string query, int take)
+    {
+        var isMember = await IsActiveMemberAsync(conversationId, userId);
+        if (!isMember)
+        {
+            return ConversationServiceResult.NotFound("Conversation not found.");
+        }
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return ConversationServiceResult.BadRequest("Search query is required.");
+        }
+
+        var pageSize = Math.Clamp(take, 1, MaxMessagePageSize);
+        var searchTerm = query.Trim();
+        var messages = await _context.ChatMessages
+            .AsNoTracking()
+            .Include(message => message.Sender)
+            .Where(message =>
+                message.ConversationId == conversationId &&
+                message.DeletedAt == null &&
+                EF.Functions.Like(message.Content, $"%{searchTerm}%"))
+            .OrderByDescending(message => message.CreatedAt)
+            .Take(pageSize)
+            .Select(message => ToMessageResponse(message))
+            .ToListAsync();
+
+        return ConversationServiceResult.Success(new SearchMessagesResponse
+        {
+            Items = messages
+        });
     }
 
     public async Task<ConversationServiceResult> UpdateMessageAsync(Guid conversationId, Guid messageId, string userId, UpdateMessageRequest request)
@@ -522,6 +565,87 @@ public sealed class ConversationService : IConversationService
         return ConversationServiceResult.Success(new { Message = "Reaction removed.", Reaction = reactionValue });
     }
 
+    public async Task<ConversationServiceResult> GetMessageAttachmentsAsync(Guid conversationId, Guid messageId, string userId)
+    {
+        var validationResult = await ValidateMessageAccessAsync(conversationId, messageId, userId);
+        if (!validationResult.Succeeded)
+        {
+            return validationResult;
+        }
+
+        var attachments = await _context.MessageAttachments
+            .AsNoTracking()
+            .Where(attachment => attachment.MessageId == messageId)
+            .OrderBy(attachment => attachment.CreatedAt)
+            .Select(attachment => ToAttachmentResponse(attachment))
+            .ToListAsync();
+
+        return ConversationServiceResult.Success(attachments);
+    }
+
+    public async Task<ConversationServiceResult> AddMessageAttachmentAsync(Guid conversationId, Guid messageId, string userId, CreateAttachmentRequest request)
+    {
+        var validationResult = await ValidateMessageAccessAsync(conversationId, messageId, userId);
+        if (!validationResult.Succeeded)
+        {
+            return validationResult;
+        }
+
+        var messageSenderId = await _context.ChatMessages
+            .Where(message => message.Id == messageId)
+            .Select(message => message.SenderId)
+            .FirstAsync();
+
+        if (messageSenderId != userId)
+        {
+            return ConversationServiceResult.Forbidden();
+        }
+
+        var attachment = new MessageAttachment
+        {
+            MessageId = messageId,
+            UploadedByUserId = userId,
+            FileName = request.FileName,
+            ContentType = request.ContentType,
+            SizeBytes = request.SizeBytes,
+            StorageKey = request.StorageKey,
+            PublicUrl = request.PublicUrl
+        };
+
+        _context.MessageAttachments.Add(attachment);
+        await _context.SaveChangesAsync();
+
+        return ConversationServiceResult.Success(ToAttachmentResponse(attachment));
+    }
+
+    public async Task<ConversationServiceResult> DeleteMessageAttachmentAsync(Guid conversationId, Guid messageId, Guid attachmentId, string userId)
+    {
+        var validationResult = await ValidateMessageAccessAsync(conversationId, messageId, userId);
+        if (!validationResult.Succeeded)
+        {
+            return validationResult;
+        }
+
+        var attachment = await _context.MessageAttachments.FirstOrDefaultAsync(item =>
+            item.Id == attachmentId &&
+            item.MessageId == messageId);
+
+        if (attachment is null)
+        {
+            return ConversationServiceResult.NotFound("Attachment not found.");
+        }
+
+        if (attachment.UploadedByUserId != userId)
+        {
+            return ConversationServiceResult.Forbidden();
+        }
+
+        _context.MessageAttachments.Remove(attachment);
+        await _context.SaveChangesAsync();
+
+        return ConversationServiceResult.Success(new { Message = "Attachment deleted." });
+    }
+
     private async Task<Conversation?> GetConversationForMemberAsync(Guid conversationId, string userId, bool asTracking)
     {
         var query = _context.Conversations
@@ -548,6 +672,24 @@ public sealed class ConversationService : IConversationService
             member.ConversationId == conversationId &&
             member.UserId == userId &&
             member.LeftAt == null);
+    }
+
+    private async Task<bool> HasBlockBetweenUsersAsync(string userId, string otherUserId)
+    {
+        return await _context.UserBlocks.AnyAsync(block =>
+            (block.BlockerUserId == userId && block.BlockedUserId == otherUserId) ||
+            (block.BlockerUserId == otherUserId && block.BlockedUserId == userId));
+    }
+
+    private async Task<bool> HasBlockedConversationMemberAsync(Guid conversationId, string userId)
+    {
+        var otherMemberIds = _context.ConversationMembers
+            .Where(member => member.ConversationId == conversationId && member.UserId != userId && member.LeftAt == null)
+            .Select(member => member.UserId);
+
+        return await _context.UserBlocks.AnyAsync(block =>
+            (block.BlockerUserId == userId && otherMemberIds.Contains(block.BlockedUserId)) ||
+            (block.BlockedUserId == userId && otherMemberIds.Contains(block.BlockerUserId)));
     }
 
     private async Task<ConversationServiceResult> ValidateMessageAccessAsync(Guid conversationId, Guid messageId, string userId)
@@ -644,6 +786,22 @@ public sealed class ConversationService : IConversationService
             FullName = reaction.User.FullName ?? reaction.User.DisplayName,
             Reaction = reaction.Reaction,
             CreatedAt = reaction.CreatedAt
+        };
+    }
+
+    private static AttachmentResponse ToAttachmentResponse(MessageAttachment attachment)
+    {
+        return new AttachmentResponse
+        {
+            Id = attachment.Id,
+            MessageId = attachment.MessageId,
+            UploadedByUserId = attachment.UploadedByUserId,
+            FileName = attachment.FileName,
+            ContentType = attachment.ContentType,
+            SizeBytes = attachment.SizeBytes,
+            StorageKey = attachment.StorageKey,
+            PublicUrl = attachment.PublicUrl,
+            CreatedAt = attachment.CreatedAt
         };
     }
 }

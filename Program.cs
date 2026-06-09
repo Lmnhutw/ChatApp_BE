@@ -9,6 +9,7 @@ using ChatApp_BE.Services;
 using ChatApp_BE.Services.Auth;
 using ChatApp_BE.Services.Conversations;
 using ChatApp_BE.Services.Realtime;
+using ChatApp_BE.Services.Users;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -89,6 +90,7 @@ builder.Services.AddScoped<IEmailConfirmationService, EmailConfirmationService>(
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddSingleton<IUserConnectionTracker, InMemoryUserConnectionTracker>();
 builder.Services.AddScoped<IUserPresenceService, UserPresenceService>();
+builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IEmailSenders>();
