@@ -1,9 +1,18 @@
-﻿namespace ChatApp_BE.ViewModels.AuthViewModel
+using System.ComponentModel.DataAnnotations;
+
+namespace ChatApp_BE.ViewModels.AuthViewModel;
+
+public class RegisterViewModel
 {
-    public class RegisterViewModel
-    {
-        public string? Email { get; set; }
-        public string? Password { get; set; }
-        public string? FullName { get; set; }
-    }
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Required]
+    [MinLength(8)]
+    public string Password { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(100)]
+    public string FullName { get; set; } = string.Empty;
 }

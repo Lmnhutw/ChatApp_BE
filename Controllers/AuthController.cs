@@ -1,325 +1,154 @@
-﻿using ChatApp_BE.Helpers;
-using ChatApp_BE.Models;
+using ChatApp_BE.Extensions;
+using ChatApp_BE.Services.Auth;
 using ChatApp_BE.ViewModels.AuthViewModel;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 
-namespace ChatApp_BE.Controllers
+namespace ChatApp_BE.Controllers;
 
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController : ControllerBase
 {
-    [AllowAnonymous]
-    [ApiController]
-    [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    private readonly IAuthService _authService;
+
+    public AuthController(IAuthService authService)
     {
-        private readonly UserManager<ApplicationUser> _userManager;
-        private readonly SignInManager<ApplicationUser> _signInManager;
-        private readonly IEmailSenders _emailSender;
-        private readonly ILogger<AuthController> _logger;
-        private readonly IConfiguration _config;
+        _authService = authService;
+    }
 
-        public AuthController(
-           UserManager<ApplicationUser> userManager,
-           SignInManager<ApplicationUser> signInManager,
-           ILogger<AuthController> logger,
-           IEmailSenders emailSender,
-           IConfiguration configuration
-           )
+    [AllowAnonymous]
+    [HttpPost("register")]
+    public async Task<IActionResult> Register(RegisterViewModel model)
+    {
+        var result = await _authService.RegisterAsync(model, Url, Request.Scheme);
+
+        return result.Status switch
         {
-            _userManager = userManager;
-            _signInManager = signInManager;
-            _logger = logger;
-            _emailSender = emailSender;
-            _config = configuration;
-        }
+            AuthResultStatus.Success => Ok(result.Value),
+            AuthResultStatus.Validation => BadRequest(new ValidationProblemDetails(result.ValidationErrors!)),
+            AuthResultStatus.BadRequest => BadRequest(new { result.Message }),
+            _ => StatusCode(StatusCodes.Status500InternalServerError)
+        };
+    }
 
-        [HttpPost("register")]
-        public async Task<IActionResult> Register(RegisterViewModel model)
+    [AllowAnonymous]
+    [HttpPost("resend-verification-email")]
+    public async Task<IActionResult> ResendVerificationEmail([FromBody] ResendVerificationEmailRequest request)
+    {
+        var result = await _authService.ResendVerificationEmailAsync(request.Email, Url, Request.Scheme);
+
+        return result.Status switch
         {
-            if (ModelState.IsValid)
-            {
-                var user = await _userManager.FindByEmailAsync(model.Email);
-                if (user != null && await _userManager.IsEmailConfirmedAsync(user))
-                {
-                    return BadRequest("Email was already used.");
-                }
+            AuthResultStatus.Success => Ok(result.Value),
+            AuthResultStatus.BadRequest => BadRequest(new { result.Message }),
+            _ => StatusCode(StatusCodes.Status500InternalServerError)
+        };
+    }
 
-                user = new ApplicationUser
-                {
-                    UserName = model.Email,
-                    Email = model.Email,
-                    FullName = model.FullName,
-                };
+    [AllowAnonymous]
+    [HttpGet("resend-verification-email/{email}")]
+    public async Task<IActionResult> ResendVerificationEmail(string email)
+    {
+        var result = await _authService.ResendVerificationEmailAsync(email, Url, Request.Scheme);
 
-                var result = await _userManager.CreateAsync(user, model.Password);
-
-                _logger.LogInformation(" response status code: {result}", result);
-                if (result.Succeeded)
-                {
-                    var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                    code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-
-                    var confirmationLink = Url.ActionLink(
-                        nameof(ConfirmEmail), "auth",
-                        new { userId = user.Id, token = code },
-                        Request.Scheme
-                    );
-
-                    var emailContent = await _emailSender.GetEmailTemplate(user.FullName, confirmationLink);
-                    await _emailSender.SendEmailAsync(
-                        "Confirm your email",
-                        model.Email,
-                        emailContent
-                    );
-
-                    return Ok(new { Message = "Registration successful! Please check your Email to confirm your account.", Email = model.Email });
-                }
-
-                foreach (var error in result.Errors)
-                {
-                    ModelState.AddModelError(string.Empty, error.Description);
-                }
-            }
-
-            return BadRequest(ModelState);
-        }
-
-        //[HttpPost("send-test-email")]
-        //public async Task<IActionResult> SendTestEmail([FromBody] TestEmailRequest request)
-        //{
-        //    _logger.LogInformation("Received request to send test email to: {Email}", request.Email);
-
-        //    try
-        //    {
-        //        await _emailSender.SendEmailAsync("Test Email", request.Email, request.Message);
-        //        _logger.LogInformation("Test email sent successfully to: {Email}", request.Email);
-        //        return Ok("Test email sent successfully!");
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Failed to send test email to: {Email}", request.Email);
-        //        return StatusCode(500, "Failed to send test email.");
-        //    }
-        //}
-
-        [HttpPost("resend-verification-email")]
-        public async Task<IActionResult> ResendVerificationEmail(string email)
+        return result.Status switch
         {
-            var user = await _userManager.FindByEmailAsync(email);
-            if (user == null || await _userManager.IsEmailConfirmedAsync(user))
-            {
-                return BadRequest("Invalid email or email already confirmed.");
-            }
+            AuthResultStatus.Success => Ok(result.Value),
+            AuthResultStatus.BadRequest => BadRequest(new { result.Message }),
+            _ => StatusCode(StatusCodes.Status500InternalServerError)
+        };
+    }
 
-            var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+    [Authorize]
+    [HttpGet("GetUserEmail/{email}")]
+    public async Task<IActionResult> GetUserByEmail(string email)
+    {
+        var result = await _authService.GetUserByEmailAsync(email, User.GetRequiredUserId());
 
-            var confirmationLink = Url.ActionLink(
-                nameof(ConfirmEmail), "auth",
-                new { userId = user.Id, token = code },
-                Request.Scheme
-            );
-
-            var emailContent = await _emailSender.GetEmailTemplate(user.FullName, confirmationLink);
-            await _emailSender.SendEmailAsync(
-                "Confirm your email",
-                email,
-                emailContent
-            );
-
-            return Ok(new { Message = "Verification email resent! Please check your email to confirm your account." });
-        }
-
-        [HttpGet("GetUserEmail/{Email}")]
-        public async Task<IActionResult> GetAllUser(string Email)
+        return result.Status switch
         {
-            var user = await _userManager.FindByEmailAsync(Email);
-            if (user == null)
-            {
-                return BadRequest("Email not found.");
-            }
-            return Ok(user);
-        }
+            AuthResultStatus.Success => Ok(result.Value),
+            AuthResultStatus.NotFound => NotFound(new { result.Message }),
+            AuthResultStatus.Forbidden => Forbid(),
+            _ => StatusCode(StatusCodes.Status500InternalServerError)
+        };
+    }
 
-        [AllowAnonymous]
-        [HttpGet("confirmemail")]
-        public async Task<IActionResult> ConfirmEmail(string userId, string token, [FromServices] ILogger<AuthController> logger)
+    [AllowAnonymous]
+    [HttpGet("confirmemail")]
+    public async Task<IActionResult> ConfirmEmail(string userId, string token)
+    {
+        var result = await _authService.ConfirmEmailAsync(userId, token);
+
+        return result.Status switch
         {
-            logger.LogInformation("Attempting to confirm email for user: {UserId}", userId);
+            AuthResultStatus.Success => Ok(result.Value),
+            AuthResultStatus.BadRequest => BadRequest(new { result.Message }),
+            _ => StatusCode(StatusCodes.Status500InternalServerError)
+        };
+    }
 
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user == null)
-            {
-                logger.LogWarning("User not found: {UserId}", userId);
-                return BadRequest("Invalid userId or token.");
-            }
+    [AllowAnonymous]
+    [HttpPost("login")]
+    public async Task<IActionResult> Login(LoginViewModel model)
+    {
+        var result = await _authService.LoginAsync(model);
 
-            var decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token));
-            logger.LogInformation("Decoded token for user: {UserId}", userId);
-
-            var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
-            if (result.Succeeded)
-            {
-                logger.LogInformation("Email confirmed successfully for user: {UserId}", user.Id);
-                return Ok("Email confirmed successfully!");
-            }
-            else
-            {
-                logger.LogWarning("Email confirmation failed for user: {UserId}", user.Id);
-                return BadRequest("Email confirmation failed.");
-            }
-        }
-
-        [Authorize]
-        [HttpPost("login")]
-        public async Task<IActionResult> Login(LoginViewModel model)
+        return result.Status switch
         {
-            try
-            {
-                if (ModelState.IsValid)
-                {
-                    var user = await _userManager.FindByEmailAsync(model.Email);
-                    if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
-                    {
-                        return Unauthorized("Invalid login attempt.");
-                    }
+            AuthResultStatus.Success => Ok(result.Value),
+            AuthResultStatus.Unauthorized => Unauthorized(new { result.Message }),
+            _ => StatusCode(StatusCodes.Status500InternalServerError)
+        };
+    }
 
-                    var tokenHandler = new JwtSecurityTokenHandler();
-                    var key = Encoding.UTF8.GetBytes(_config.GetSection("Jwt:SecretKey").Value);
-                    var tokenDescriptor = new SecurityTokenDescriptor
-                    {
-                        Subject = new ClaimsIdentity(new Claim[]
-                        {
-                    new Claim(ClaimTypes.Name, user.UserName),
-                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
-                        }),
-                        Expires = DateTime.UtcNow.AddDays(14),
-                        SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-                    };
+    [Authorize]
+    [HttpGet("GetUserById/{userId}")]
+    public async Task<IActionResult> GetUserById(string userId)
+    {
+        var result = await _authService.GetUserByIdAsync(userId, User.GetRequiredUserId());
 
-                    var token = tokenHandler.CreateToken(tokenDescriptor);
-                    var tokenString = tokenHandler.WriteToken(token);
-                    var userInfo = new
-                    {
-                        user.Id,
-                        user.Email,
-                        user.UserName,
-                        user.FullName,
-                        // user.ProfilePic // Include other user properties if available
-                    };
-
-                    return Ok(new { Token = tokenString, user = userInfo });
-                }
-
-                return BadRequest(ModelState);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
-        }
-
-        [HttpGet("GetUserById/{userId}")]
-        public async Task<IActionResult> GetUserById(string userId)
+        return result.Status switch
         {
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user == null)
-            {
-                return BadRequest("User not found.");
-            }
-            return Ok(new
-            {
-                user.Id,
-                user.Email,
-                user.UserName,
-                user.FullName, // Assuming FullName is a property in your ApplicationUser class
-                //user.ProfilePic // Assuming ProfilePic is a property in your ApplicationUser class
-            });
-        }
+            AuthResultStatus.Success => Ok(result.Value),
+            AuthResultStatus.NotFound => NotFound(new { result.Message }),
+            AuthResultStatus.Forbidden => Forbid(),
+            _ => StatusCode(StatusCodes.Status500InternalServerError)
+        };
+    }
 
-        [Authorize]
-        [HttpGet("check")]
-        public IActionResult Check()
+    [Authorize]
+    [HttpGet("me")]
+    public async Task<IActionResult> Me()
+    {
+        var result = await _authService.GetCurrentUserAsync(User.GetRequiredUserId());
+
+        return result.Status switch
         {
-            return Ok("User is authenticated");
-        }
+            AuthResultStatus.Success => Ok(result.Value),
+            AuthResultStatus.Unauthorized => Unauthorized(new { result.Message }),
+            _ => StatusCode(StatusCodes.Status500InternalServerError)
+        };
+    }
 
-        [Authorize]
-        [HttpPost("logout")]
-        public async Task<IActionResult> Logout()
+    [Authorize]
+    [HttpGet("check")]
+    public IActionResult Check()
+    {
+        return Ok(new { Message = "User is authenticated", UserId = User.GetRequiredUserId() });
+    }
+
+    [Authorize]
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        var result = await _authService.LogoutAsync(User.GetRequiredUserId());
+
+        return result.Status switch
         {
-            await _signInManager.SignOutAsync();
-            _logger.LogInformation("User log out");
-            return Ok(new { Message = "Logged out successfully!" });
-        }
-
-        //    [HttpPost("forgotpassword")]
-        //    public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
-        //    {
-        //        if (ModelState.IsValid)
-        //        {
-        //            var user = await _userManager.FindByEmailAsync(model.Email);
-        //            if (user == null || !(await _userManager.IsEmailConfirmedAsync(user)))
-        //            {
-        //                return BadRequest("The user either does not exist or is not confirmed.");
-        //            }
-
-        //            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-        //            var resetLink = Url.Action(
-        //                nameof(ResetPassword),
-        //                "ApplicationUser",
-        //                new { token, email = user.Email },
-        //                Request.Scheme
-        //                );
-        //            await _emailSender.SendEmailAsync("Reset Password",
-        //                model.Email,
-        //                $"Please reset your password by clicking <a href=\"{resetLink}\">here</a>."
-        //                );
-
-        //            return Ok(new { message = "Please check your email to reset your password." });
-        //        }
-
-        //        return BadRequest(ModelState);
-        //    }
-
-        //    [HttpGet("resetpassword")]
-        //    public IActionResult ResetPassword(string token, string email)
-        //    {
-        //        var model = new ResetPasswordViewModel { Token = token, Email = email };
-        //        return Ok(model); // Return a view in real implementation
-        //    }
-
-        //    [HttpPost("resetpassword")]
-        //    public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
-        //    {
-        //        if (ModelState.IsValid)
-        //        {
-        //            var user = await _userManager.FindByEmailAsync(model.Email);
-        //            if (user == null)
-        //            {
-        //                return BadRequest("Invalid password reset request.");
-        //            }
-
-        //            var result = await _userManager.ResetPasswordAsync(user, model.Token, model.Password);
-
-        //            if (result.Succeeded)
-        //            {
-        //                return Ok("Password reset successful!");
-        //            }
-
-        //            foreach (var error in result.Errors)
-        //            {
-        //                ModelState.AddModelError(string.Empty, error.Description);
-        //            }
-        //        }
-
-        //        return BadRequest(ModelState);
-        //    }
+            AuthResultStatus.Success => Ok(result.Value),
+            _ => StatusCode(StatusCodes.Status500InternalServerError)
+        };
     }
 }

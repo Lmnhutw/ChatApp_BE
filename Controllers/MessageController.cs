@@ -1,150 +1,137 @@
-﻿using ChatApp_BE.Data;
+using ChatApp_BE.Data;
+using ChatApp_BE.Extensions;
 using ChatApp_BE.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace ChatApp_BE.Controllers
+namespace ChatApp_BE.Controllers;
+
+[Authorize]
+[Route("api/[controller]")]
+[ApiController]
+public class MessageController : ControllerBase
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class MessageController : ControllerBase
+    private readonly ChatAppContext _context;
+
+    public MessageController(ChatAppContext context)
     {
-        private readonly ChatAppContext _cxt;
+        _context = context;
+    }
 
-        public MessageController(ChatAppContext cxt)
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<MessageViewModel>>> GetMessages()
+    {
+        var messages = await _context.Messages
+            .Include(message => message.User)
+            .Include(message => message.Room)
+            .ToListAsync();
+
+        var messageViewModels = messages.Select(message => new MessageViewModel
         {
-            _cxt = cxt;
+            MessageId = message.MessageId,
+            Content = message.Content,
+            Timestamp = message.Timestamp,
+            UserId = message.User?.Id ?? string.Empty,
+            DisplayName = message.User?.FullName ?? string.Empty,
+            RoomId = message.RoomId,
+            RoomName = message.Room.Name ?? string.Empty
+        }).ToList();
+
+        return Ok(messageViewModels);
+    }
+
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<MessageViewModel>> GetMessage(int id)
+    {
+        var message = await _context.Messages
+            .Include(message => message.User)
+            .Include(message => message.Room)
+            .FirstOrDefaultAsync(message => message.MessageId == id);
+
+        if (message is null)
+        {
+            return NotFound();
         }
 
-        // GET: api/Message
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<MessageViewModel>>> GetMessages()
+        var messageViewModel = new MessageViewModel
         {
-            var messages = await _cxt.Messages
-                                     .Include(m => m.User)
-                                     .Include(m => m.Room)
-                                     .ToListAsync();
+            MessageId = message.MessageId,
+            Content = message.Content,
+            Timestamp = message.Timestamp,
+            UserId = message.User?.Id ?? string.Empty,
+            DisplayName = message.User?.FullName ?? string.Empty,
+            RoomId = message.RoomId,
+            RoomName = message.Room.Name ?? string.Empty
+        };
 
-            var messageViewModels = messages.Select(message => new MessageViewModel
-            {
-                MessageId = message.MessageId,
-                Content = message.Content,
-                Timestamp = message.Timestamp,
-                UserId = message.User.Id,
-                DisplayName = message.User.FullName,
-                RoomId = message.RoomId,
-                RoomName = message.Room.Name
-            }).ToList();
+        return Ok(messageViewModel);
+    }
 
-            return Ok(messageViewModels);
+    [HttpPost]
+    public async Task<ActionResult<MessageViewModel>> PostMessage(MessageViewModel messageViewModel)
+    {
+        var message = new Message
+        {
+            Content = messageViewModel.Content ?? string.Empty,
+            Timestamp = DateTime.UtcNow,
+            RoomId = messageViewModel.RoomId,
+            Id = User.GetRequiredUserId(),
+        };
+
+        _context.Messages.Add(message);
+        await _context.SaveChangesAsync();
+
+        messageViewModel.MessageId = message.MessageId;
+        messageViewModel.Timestamp = message.Timestamp;
+        messageViewModel.UserId = message.Id;
+
+        return CreatedAtAction(nameof(GetMessage), new { id = message.MessageId }, messageViewModel);
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> PutMessage(int id, MessageViewModel messageViewModel)
+    {
+        if (id != messageViewModel.MessageId)
+        {
+            return BadRequest();
         }
 
-        // GET: api/Message/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<MessageViewModel>> GetMessage(int id)
+        var currentUserId = User.GetRequiredUserId();
+        var message = await _context.Messages.FindAsync(id);
+        if (message is null)
         {
-            var message = await _cxt.Messages
-                                     .Include(m => m.User)
-                                     .Include(m => m.Room)
-                                     .FirstOrDefaultAsync(m => m.MessageId == id);
+            return NotFound();
+        }
 
-            if (message == null)
+        if (message.Id != currentUserId)
+        {
+            return Forbid();
+        }
+
+        message.Content = messageViewModel.Content ?? string.Empty;
+        message.Timestamp = DateTime.UtcNow;
+        message.RoomId = messageViewModel.RoomId;
+
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (!MessageExists(id))
             {
                 return NotFound();
             }
 
-            var messageViewModel = new MessageViewModel
-            {
-                MessageId = message.MessageId,
-                Content = message.Content,
-                Timestamp = message.Timestamp,
-                UserId = message.User.Id,
-                DisplayName = message.User.FullName,
-                RoomId = message.RoomId,
-                RoomName = message.Room.Name
-            };
-
-            return Ok(messageViewModel);
+            throw;
         }
 
-        // POST: api/Message
-        [HttpPost]
-        public async Task<ActionResult<Message>> PostMessage(MessageViewModel messageViewModel)
-        {
-            var message = new Message
-            {
-                Content = messageViewModel.Content,
-                Timestamp = DateTime.UtcNow, // Ensure correct timestamp
-                RoomId = messageViewModel.RoomId,
-                Id = messageViewModel.UserId,
-            };
+        return NoContent();
+    }
 
-            _cxt.Messages.Add(message);
-            await _cxt.SaveChangesAsync();
-
-            return CreatedAtAction("GetMessage", new { id = message.MessageId }, message);
-        }
-
-        // PUT: api/Message/5
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutMessage(int id, MessageViewModel messageViewModel)
-        {
-            if (id != messageViewModel.MessageId)
-            {
-                return BadRequest();
-            }
-
-            var message = await _cxt.Messages.FindAsync(id);
-            if (message == null)
-            {
-                return NotFound();
-            }
-
-            message.Content = messageViewModel.Content;
-            message.Timestamp = DateTime.UtcNow; // Ensure correct timestamp
-            message.RoomId = messageViewModel.RoomId;
-            message.Id = messageViewModel.UserId;
-
-            _cxt.Entry(message).State = EntityState.Modified;
-
-            try
-            {
-                await _cxt.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!MessageExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
-        }
-
-        //// DELETE: api/Message/5
-        //[HttpDelete("{id}")]
-        //public async Task<IActionResult> DeleteMessage(MessageViewModel messageViewModel)
-        //{
-        //    var message = await _cxt.Messages.FindAsync(Content);
-        //    if (message == null)
-        //    {
-        //        return NotFound();
-        //    }
-
-        //    _cxt.Messages.Remove(message);
-        //    await _cxt.SaveChangesAsync();
-
-        //    return NoContent();
-        //}
-
-        private bool MessageExists(int id)
-        {
-            return _cxt.Messages.Any(e => e.MessageId == id);
-        }
+    private bool MessageExists(int id)
+    {
+        return _context.Messages.Any(message => message.MessageId == id);
     }
 }

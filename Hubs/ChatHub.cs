@@ -1,263 +1,207 @@
-﻿using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Logging;
-using System.Threading.Tasks;
-using ChatApp_BE.Models;
-using ChatApp_BE.ViewModels;
-using System;
-using System.Linq;
-using Microsoft.EntityFrameworkCore;
 using ChatApp_BE.Data;
-using ChatApp_BE.Services;
-using SendGrid.Helpers.Mail;
-using System.Collections.Generic;
-using AutoMapper.Execution;
+using ChatApp_BE.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
-namespace ChatApp_BE.Hubs
+namespace ChatApp_BE.Hubs;
+
+[Authorize]
+public class ChatHub : Hub
 {
-    public class ChatHub : Hub
+    private readonly ILogger<ChatHub> _logger;
+    private readonly ChatAppContext _context;
+
+    public ChatHub(ILogger<ChatHub> logger, ChatAppContext context)
     {
-        private readonly MessageService _messageService;
-        private readonly RoomService _roomService;
-        private readonly ILogger<ChatHub> _logger;
-        private readonly ChatAppContext _context;
+        _logger = logger;
+        _context = context;
+    }
 
-        public ChatHub(MessageService messageService, RoomService roomService, ILogger<ChatHub> logger, ChatAppContext context)
+    public async Task CreateRoom(RoomViewModel model)
+    {
+        var user = await GetCurrentUserAsync();
+        if (string.IsNullOrWhiteSpace(model.RoomName))
         {
-            _messageService = messageService;
-            _roomService = roomService;
-            _logger = logger;
-            _context = context;
+            await Clients.Caller.SendAsync("CreateRoomError", "Room name is required.");
+            return;
         }
 
-        public async Task CreateRoom(RoomViewModel model)
+        var displayName = GetDisplayName(user);
+        var room = new Room
         {
-            _logger.LogInformation("Received request to create room: {RoomName} by {CreatedBy}", model.RoomName, model.CreatedBy);
+            Name = model.RoomName,
+            CreatedBy = displayName,
+            CreatedAt = DateTime.UtcNow,
+            Id = user.Id
+        };
 
-            try
-            {
-                // Log the incoming RoomViewModel
-                // Log the incoming RoomViewModel
-                _logger.LogInformation("RoomViewModel: {@RoomViewModel}", model);
+        room.RoomUsers.Add(new RoomUser
+        {
+            RoomId = room.RoomId,
+            Id = user.Id,
+            IsMember = true,
+            FullName = displayName
+        });
 
-                // Fetch the user who is creating the room
-                var user = await _context.Users.FirstOrDefaultAsync(u => u.FullName == model.CreatedBy);
-                // Check if the user exists and log the result
-                if (user == null)
-                {
-                    _logger.LogWarning("User not found: {CreatedBy}", model.CreatedBy);
-                    throw new ArgumentException("User not found");
-                }
+        _context.Rooms.Add(room);
+        await _context.SaveChangesAsync();
+        await Groups.AddToGroupAsync(Context.ConnectionId, room.Name);
 
-                // Log the found user details
-                _logger.LogInformation("User: {@User}", user);
+        await Clients.Caller.SendAsync("RoomCreated", new RoomViewModel
+        {
+            RoomId = room.RoomId,
+            RoomName = room.Name,
+            CreatedBy = room.CreatedBy,
+            UserId = user.Id,
+            Members = new List<RoleUserViewModel>()
+        });
+    }
 
-                // Create the room and log the details
-                var room = new Room
-                {
-                    Name = model.RoomName,
-                    CreatedBy = model.CreatedBy,
-                    CreatedAt = DateTime.UtcNow,
-                    Id = user.Id // Set the UserId
-                };
-
-                _logger.LogInformation("Room to be created: {@Room}", room);
-
-                _context.Rooms.Add(room);
-                await _context.SaveChangesAsync();
-
-                var roomViewModel = new RoomViewModel
-                {
-                    RoomId = room.RoomId,
-                    RoomName = room.Name,
-                    CreatedBy = room.CreatedBy,
-                    UserId = user.Id, // Include the UserId
-                    Members = new List<RoleUserViewModel>()
-                };
-
-                _logger.LogInformation("Room created successfully: {@RoomViewModel}", roomViewModel);
-
-                await Clients.Caller.SendAsync("RoomCreated", roomViewModel);
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogWarning(ex, "Validation error while creating room {RoomName}", model.RoomName);
-                await Clients.Caller.SendAsync("CreateRoomError", "Validation error: " + ex.Message);
-            }
-            catch (DbUpdateException dbEx)
-            {
-                _logger.LogError(dbEx, "Database error while creating room {RoomName}", model.RoomName);
-                await Clients.Caller.SendAsync("CreateRoomError", "Database error: " + dbEx.Message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error while creating room {RoomName}", model.RoomName);
-                await Clients.Caller.SendAsync("CreateRoomError", "Unexpected error: " + ex.Message);
-            }
+    public async Task JoinRoom(MessageViewModel model, string? userId = null)
+    {
+        var currentUser = await GetCurrentUserAsync();
+        if (!string.IsNullOrWhiteSpace(userId) && userId != currentUser.Id)
+        {
+            _logger.LogWarning("Client supplied mismatched SignalR user id {SuppliedUserId} for authenticated user {UserId}", userId, currentUser.Id);
         }
 
-        public async Task JoinRoom(MessageViewModel model, string userId)
+        var room = await _context.Rooms
+            .Include(room => room.RoomUsers)
+            .FirstOrDefaultAsync(room => room.Name == model.RoomName);
+
+        if (room is null)
         {
-            _logger.LogInformation("User {User} attempting to join room {RoomName}", model.FullName, model.RoomName);
-
-            try
-            {
-                var room = await _context.Rooms.FirstOrDefaultAsync(r => r.Name == model.RoomName);
-                if (room == null)
-                {
-                    _logger.LogWarning("Room {RoomName} does not exist", model.RoomName);
-                    throw new ArgumentException("Room does not exist");
-                }
-
-                var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
-                if (user == null)
-                {
-                    _logger.LogWarning("User not found: {UserId}", userId);
-                    throw new ArgumentException("User not found");
-                }
-
-                room.RoomUsers.Add(new RoomUser
-                {
-                    RoomId = room.RoomId,
-                    Id = user.Id,
-                    IsMember = true,
-                    FullName = user.FullName,
-                });
-
-                await _context.SaveChangesAsync();
-
-                await Groups.AddToGroupAsync(Context.ConnectionId, model.RoomName);
-                await Clients.Group(model.RoomName).SendAsync("UserJoined", user.FullName);
-
-                _logger.LogInformation("User {User} successfully joined room {RoomName}", model.FullName, model.RoomName);
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogWarning(ex, "Validation error while joining room {RoomName}", model.RoomName);
-                await Clients.Caller.SendAsync("JoinRoomError", "Validation error: " + ex.Message);
-            }
-            catch (DbUpdateException dbEx)
-            {
-                _logger.LogError(dbEx, "Database error while joining room {RoomName}", model.RoomName);
-                await Clients.Caller.SendAsync("JoinRoomError", "Database error: " + dbEx.Message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error while joining room {RoomName}", model.RoomName);
-                await Clients.Caller.SendAsync("JoinRoomError", "Unexpected error: " + ex.Message);
-            }
+            await Clients.Caller.SendAsync("JoinRoomError", "Room does not exist.");
+            return;
         }
 
-        public async Task SendMessage(MessageViewModel model)
+        var displayName = GetDisplayName(currentUser);
+        var member = room.RoomUsers.FirstOrDefault(roomUser => roomUser.Id == currentUser.Id);
+        if (member is null)
         {
-            try
+            room.RoomUsers.Add(new RoomUser
             {
-                _logger.LogInformation("User {User} attempting to send message to room {RoomName}", model.FullName, model.RoomName);
+                RoomId = room.RoomId,
+                Id = currentUser.Id,
+                IsMember = true,
+                FullName = displayName
+            });
 
-                var room = await _context.Rooms.FirstOrDefaultAsync(r => r.Name == model.RoomName);
-                if (room == null)
-                {
-                    _logger.LogWarning("Room {RoomName} does not exist", model.RoomName);
-                    throw new ArgumentException("Room does not exist");
-                }
-
-                var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == model.UserId);
-                if (user == null)
-                {
-                    _logger.LogWarning("User not found: {UserId}", model.UserId);
-                    throw new ArgumentException("User not found");
-                }
-
-                var messageEntity = new Message
-                {
-                    Content = model.Content,
-                    Timestamp = DateTime.UtcNow,
-                    RoomId = room.RoomId,
-                    User = user
-                };
-
-                _context.Messages.Add(messageEntity);
-                await _context.SaveChangesAsync();
-
-                var chatMessage = new
-                {
-                    sender = model.FullName,
-                    content = model.Content,
-                    timeStamp = messageEntity.Timestamp.ToString("hh:mm tt")
-                };
-
-                await Clients.Group(model.RoomName).SendAsync("ReceiveMessage", chatMessage);
-
-                _logger.LogInformation("Message sent from user {User} to room {RoomName}", model.FullName, model.RoomName);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in SendMessage from user {User} to room {RoomName}", model.FullName, model.RoomName);
-                throw;
-            }
+            await _context.SaveChangesAsync();
+        }
+        else if (!member.IsMember)
+        {
+            member.IsMember = true;
+            member.FullName = displayName;
+            await _context.SaveChangesAsync();
         }
 
-        public async Task LeaveRoom(RoomViewModel model, string userId)
+        await Groups.AddToGroupAsync(Context.ConnectionId, room.Name ?? string.Empty);
+        await Clients.Group(room.Name ?? string.Empty).SendAsync("UserJoined", displayName);
+    }
+
+    public async Task SendMessage(MessageViewModel model)
+    {
+        var currentUser = await GetCurrentUserAsync();
+        var room = await _context.Rooms.FirstOrDefaultAsync(room => room.Name == model.RoomName);
+        if (room is null)
         {
-            try
-            {
-                var room = await _context.Rooms.Include(r => r.RoomUsers).FirstOrDefaultAsync(r => r.Name == model.RoomName);
-                if (room != null)
-                {
-                    var roomUser = room.RoomUsers.FirstOrDefault(ru => ru.Id == userId);
-                    if (roomUser != null)
-                    {
-                        room.RoomUsers.Remove(roomUser);
-                        await _context.SaveChangesAsync();
-
-                        await Groups.RemoveFromGroupAsync(Context.ConnectionId, model.RoomName);
-
-                        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
-                        if (user != null)
-                        {
-                            await Clients.Group(model.RoomName).SendAsync("UserLeft", user.FullName);
-                        }
-
-                        _logger.LogInformation("User {UserId} left room {RoomName}", userId, model.RoomName);
-                    }
-                }
-                else
-                {
-                    _logger.LogWarning("Room {RoomName} does not exist", model.RoomName);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in LeaveRoom for user {UserId} and room {RoomName}", userId, model.RoomName);
-                throw;
-            }
+            await Clients.Caller.SendAsync("SendMessageError", "Room does not exist.");
+            return;
         }
 
-        public override async Task OnConnectedAsync()
+        var isMember = await _context.RoomUsers.AnyAsync(roomUser =>
+            roomUser.RoomId == room.RoomId &&
+            roomUser.Id == currentUser.Id &&
+            roomUser.IsMember);
+
+        if (!isMember)
         {
-            try
-            {
-                _logger.LogInformation("Client connected: {ConnectionId}", Context.ConnectionId);
-                await base.OnConnectedAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in OnConnectedAsync for connection {ConnectionId}", Context.ConnectionId);
-                throw;
-            }
+            await Clients.Caller.SendAsync("SendMessageError", "You must join the room before sending messages.");
+            return;
         }
 
-        public override async Task OnDisconnectedAsync(Exception exception)
+        var messageEntity = new Message
         {
-            try
-            {
-                _logger.LogInformation("Client disconnected: {ConnectionId}", Context.ConnectionId);
-                await base.OnDisconnectedAsync(exception);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in OnDisconnectedAsync for connection {ConnectionId}", Context.ConnectionId);
-                throw;
-            }
+            Content = model.Content ?? string.Empty,
+            Timestamp = DateTime.UtcNow,
+            RoomId = room.RoomId,
+            Id = currentUser.Id
+        };
+
+        _context.Messages.Add(messageEntity);
+        await _context.SaveChangesAsync();
+
+        await Clients.Group(room.Name ?? string.Empty).SendAsync("ReceiveMessage", new
+        {
+            sender = GetDisplayName(currentUser),
+            content = messageEntity.Content,
+            timeStamp = messageEntity.Timestamp.ToString("hh:mm tt")
+        });
+    }
+
+    public async Task LeaveRoom(RoomViewModel model, string? userId = null)
+    {
+        var currentUser = await GetCurrentUserAsync();
+        if (!string.IsNullOrWhiteSpace(userId) && userId != currentUser.Id)
+        {
+            _logger.LogWarning("Client supplied mismatched SignalR user id {SuppliedUserId} for authenticated user {UserId}", userId, currentUser.Id);
         }
+
+        var room = await _context.Rooms
+            .Include(room => room.RoomUsers)
+            .FirstOrDefaultAsync(room => room.Name == model.RoomName);
+
+        if (room is null)
+        {
+            await Clients.Caller.SendAsync("LeaveRoomError", "Room does not exist.");
+            return;
+        }
+
+        var roomUser = room.RoomUsers.FirstOrDefault(member => member.Id == currentUser.Id);
+        if (roomUser is not null)
+        {
+            room.RoomUsers.Remove(roomUser);
+            await _context.SaveChangesAsync();
+        }
+
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, room.Name ?? string.Empty);
+        await Clients.Group(room.Name ?? string.Empty).SendAsync("UserLeft", GetDisplayName(currentUser));
+    }
+
+    public override async Task OnConnectedAsync()
+    {
+        _logger.LogInformation("Authenticated client connected: {ConnectionId}, UserId: {UserId}", Context.ConnectionId, GetCurrentUserId());
+        await base.OnConnectedAsync();
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        _logger.LogInformation("Authenticated client disconnected: {ConnectionId}, UserId: {UserId}", Context.ConnectionId, GetCurrentUserId());
+        await base.OnDisconnectedAsync(exception);
+    }
+
+    private string GetCurrentUserId()
+    {
+        var userId = Context.UserIdentifier ?? Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            throw new HubException("Authenticated user id claim is missing.");
+        }
+
+        return userId;
+    }
+
+    private async Task<ApplicationUser> GetCurrentUserAsync()
+    {
+        var user = await _context.Users.FindAsync(GetCurrentUserId());
+        return user ?? throw new HubException("Authenticated user no longer exists.");
+    }
+
+    private static string GetDisplayName(ApplicationUser user)
+    {
+        return user.FullName ?? user.DisplayName ?? user.UserName ?? user.Email ?? user.Id;
     }
 }
