@@ -1,207 +1,276 @@
-using ChatApp_BE.Data;
-using ChatApp_BE.Models;
+using ChatApp_BE.Extensions;
+using ChatApp_BE.Services.Conversations;
+using ChatApp_BE.Services.Realtime;
+using ChatApp_BE.ViewModels.ConversationViewModel;
+using ChatApp_BE.ViewModels.Realtime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace ChatApp_BE.Hubs;
 
 [Authorize]
 public class ChatHub : Hub
 {
-    private readonly ILogger<ChatHub> _logger;
-    private readonly ChatAppContext _context;
+    private const string RealtimeErrorEventName = "RealtimeError";
 
-    public ChatHub(ILogger<ChatHub> logger, ChatAppContext context)
+    private readonly IConversationService _conversationService;
+    private readonly IUserConnectionTracker _connectionTracker;
+    private readonly ILogger<ChatHub> _logger;
+
+    public ChatHub(
+        IConversationService conversationService,
+        IUserConnectionTracker connectionTracker,
+        ILogger<ChatHub> logger)
     {
+        _conversationService = conversationService;
+        _connectionTracker = connectionTracker;
         _logger = logger;
-        _context = context;
     }
 
-    public async Task CreateRoom(RoomViewModel model)
+    public async Task JoinConversation(Guid conversationId)
     {
-        var user = await GetCurrentUserAsync();
-        if (string.IsNullOrWhiteSpace(model.RoomName))
+        var userId = GetCurrentUserId();
+        var result = await _conversationService.GetConversationAsync(conversationId, userId);
+        if (!result.Succeeded)
         {
-            await Clients.Caller.SendAsync("CreateRoomError", "Room name is required.");
+            await SendErrorAsync("conversation_not_found", result.Message);
             return;
         }
 
-        var displayName = GetDisplayName(user);
-        var room = new Room
+        var groupName = GetConversationGroupName(conversationId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+
+        await Clients.Caller.SendAsync("ConversationJoined", result.Value);
+        await Clients.GroupExcept(groupName, [Context.ConnectionId]).SendAsync("UserJoinedConversation", new ConversationUserEvent
         {
-            Name = model.RoomName,
-            CreatedBy = displayName,
-            CreatedAt = DateTime.UtcNow,
-            Id = user.Id
+            ConversationId = conversationId,
+            UserId = userId,
+            ConnectionId = Context.ConnectionId
+        });
+    }
+
+    public async Task LeaveConversation(Guid conversationId)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _conversationService.GetConversationAsync(conversationId, userId);
+        if (!result.Succeeded)
+        {
+            await SendErrorAsync("conversation_not_found", result.Message);
+            return;
+        }
+
+        var groupName = GetConversationGroupName(conversationId);
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
+
+        await Clients.Caller.SendAsync("ConversationLeft", new ConversationUserEvent
+        {
+            ConversationId = conversationId,
+            UserId = userId,
+            ConnectionId = Context.ConnectionId
+        });
+        await Clients.Group(groupName).SendAsync("UserLeftConversation", new ConversationUserEvent
+        {
+            ConversationId = conversationId,
+            UserId = userId,
+            ConnectionId = Context.ConnectionId
+        });
+    }
+
+    public async Task SendConversationMessage(Guid conversationId, SendMessageRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _conversationService.SendMessageAsync(conversationId, userId, request);
+        if (!result.Succeeded)
+        {
+            await SendErrorAsync("send_message_failed", result.Message);
+            return;
+        }
+
+        var message = (MessageResponse)result.Value!;
+        var messageEvent = new ConversationMessageReceivedEvent
+        {
+            ConversationId = conversationId,
+            Message = message
         };
 
-        room.RoomUsers.Add(new RoomUser
+        await Clients.Group(GetConversationGroupName(conversationId)).SendAsync("MessageReceived", messageEvent);
+        await Clients.Group(GetConversationGroupName(conversationId)).SendAsync("ReceiveMessage", new
         {
-            RoomId = room.RoomId,
-            Id = user.Id,
-            IsMember = true,
-            FullName = displayName
+            sender = message.SenderFullName ?? message.SenderId,
+            content = message.Content,
+            timeStamp = message.CreatedAt.ToString("hh:mm tt")
         });
+    }
 
-        _context.Rooms.Add(room);
-        await _context.SaveChangesAsync();
-        await Groups.AddToGroupAsync(Context.ConnectionId, room.Name);
-
-        await Clients.Caller.SendAsync("RoomCreated", new RoomViewModel
+    public async Task EditConversationMessage(Guid conversationId, Guid messageId, UpdateMessageRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _conversationService.UpdateMessageAsync(conversationId, messageId, userId, request);
+        if (!result.Succeeded)
         {
-            RoomId = room.RoomId,
-            RoomName = room.Name,
-            CreatedBy = room.CreatedBy,
-            UserId = user.Id,
-            Members = new List<RoleUserViewModel>()
+            await SendErrorAsync("edit_message_failed", result.Message);
+            return;
+        }
+
+        await Clients.Group(GetConversationGroupName(conversationId)).SendAsync("MessageUpdated", result.Value);
+    }
+
+    public async Task DeleteConversationMessage(Guid conversationId, Guid messageId)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _conversationService.DeleteMessageAsync(conversationId, messageId, userId);
+        if (!result.Succeeded)
+        {
+            await SendErrorAsync("delete_message_failed", result.Message);
+            return;
+        }
+
+        await Clients.Group(GetConversationGroupName(conversationId)).SendAsync("MessageDeleted", new
+        {
+            ConversationId = conversationId,
+            MessageId = messageId,
+            DeletedByUserId = userId,
+            DeletedAt = DateTime.UtcNow
         });
+    }
+
+    public async Task CreateDirectConversation(CreateDirectConversationRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _conversationService.CreateDirectConversationAsync(userId, request);
+        if (!result.Succeeded)
+        {
+            await SendErrorAsync("create_direct_conversation_failed", result.Message);
+            return;
+        }
+
+        var conversation = (ConversationResponse)result.Value!;
+        await JoinConversation(conversation.Id);
+        await Clients.Caller.SendAsync("ConversationCreated", conversation);
+    }
+
+    public async Task CreateGroupConversation(CreateGroupConversationRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _conversationService.CreateGroupConversationAsync(userId, request);
+        if (!result.Succeeded)
+        {
+            await SendErrorAsync("create_group_conversation_failed", result.Message);
+            return;
+        }
+
+        var conversation = (ConversationResponse)result.Value!;
+        await JoinConversation(conversation.Id);
+        await Clients.Caller.SendAsync("ConversationCreated", conversation);
     }
 
     public async Task JoinRoom(MessageViewModel model, string? userId = null)
     {
-        var currentUser = await GetCurrentUserAsync();
-        if (!string.IsNullOrWhiteSpace(userId) && userId != currentUser.Id)
+        if (!TryGetConversationId(model.RoomName, out var conversationId))
         {
-            _logger.LogWarning("Client supplied mismatched SignalR user id {SuppliedUserId} for authenticated user {UserId}", userId, currentUser.Id);
-        }
-
-        var room = await _context.Rooms
-            .Include(room => room.RoomUsers)
-            .FirstOrDefaultAsync(room => room.Name == model.RoomName);
-
-        if (room is null)
-        {
-            await Clients.Caller.SendAsync("JoinRoomError", "Room does not exist.");
+            await Clients.Caller.SendAsync("JoinRoomError", "RoomName must be a conversation id for the production chat hub.");
             return;
         }
 
-        var displayName = GetDisplayName(currentUser);
-        var member = room.RoomUsers.FirstOrDefault(roomUser => roomUser.Id == currentUser.Id);
-        if (member is null)
-        {
-            room.RoomUsers.Add(new RoomUser
-            {
-                RoomId = room.RoomId,
-                Id = currentUser.Id,
-                IsMember = true,
-                FullName = displayName
-            });
-
-            await _context.SaveChangesAsync();
-        }
-        else if (!member.IsMember)
-        {
-            member.IsMember = true;
-            member.FullName = displayName;
-            await _context.SaveChangesAsync();
-        }
-
-        await Groups.AddToGroupAsync(Context.ConnectionId, room.Name ?? string.Empty);
-        await Clients.Group(room.Name ?? string.Empty).SendAsync("UserJoined", displayName);
+        await JoinConversation(conversationId);
     }
 
     public async Task SendMessage(MessageViewModel model)
     {
-        var currentUser = await GetCurrentUserAsync();
-        var room = await _context.Rooms.FirstOrDefaultAsync(room => room.Name == model.RoomName);
-        if (room is null)
+        if (!TryGetConversationId(model.RoomName, out var conversationId))
         {
-            await Clients.Caller.SendAsync("SendMessageError", "Room does not exist.");
+            await Clients.Caller.SendAsync("SendMessageError", "RoomName must be a conversation id for the production chat hub.");
             return;
         }
 
-        var isMember = await _context.RoomUsers.AnyAsync(roomUser =>
-            roomUser.RoomId == room.RoomId &&
-            roomUser.Id == currentUser.Id &&
-            roomUser.IsMember);
-
-        if (!isMember)
+        await SendConversationMessage(conversationId, new SendMessageRequest
         {
-            await Clients.Caller.SendAsync("SendMessageError", "You must join the room before sending messages.");
-            return;
-        }
-
-        var messageEntity = new Message
-        {
-            Content = model.Content ?? string.Empty,
-            Timestamp = DateTime.UtcNow,
-            RoomId = room.RoomId,
-            Id = currentUser.Id
-        };
-
-        _context.Messages.Add(messageEntity);
-        await _context.SaveChangesAsync();
-
-        await Clients.Group(room.Name ?? string.Empty).SendAsync("ReceiveMessage", new
-        {
-            sender = GetDisplayName(currentUser),
-            content = messageEntity.Content,
-            timeStamp = messageEntity.Timestamp.ToString("hh:mm tt")
+            Content = model.Content ?? string.Empty
         });
     }
 
     public async Task LeaveRoom(RoomViewModel model, string? userId = null)
     {
-        var currentUser = await GetCurrentUserAsync();
-        if (!string.IsNullOrWhiteSpace(userId) && userId != currentUser.Id)
+        if (!TryGetConversationId(model.RoomName, out var conversationId))
         {
-            _logger.LogWarning("Client supplied mismatched SignalR user id {SuppliedUserId} for authenticated user {UserId}", userId, currentUser.Id);
-        }
-
-        var room = await _context.Rooms
-            .Include(room => room.RoomUsers)
-            .FirstOrDefaultAsync(room => room.Name == model.RoomName);
-
-        if (room is null)
-        {
-            await Clients.Caller.SendAsync("LeaveRoomError", "Room does not exist.");
+            await Clients.Caller.SendAsync("LeaveRoomError", "RoomName must be a conversation id for the production chat hub.");
             return;
         }
 
-        var roomUser = room.RoomUsers.FirstOrDefault(member => member.Id == currentUser.Id);
-        if (roomUser is not null)
-        {
-            room.RoomUsers.Remove(roomUser);
-            await _context.SaveChangesAsync();
-        }
+        await LeaveConversation(conversationId);
+    }
 
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, room.Name ?? string.Empty);
-        await Clients.Group(room.Name ?? string.Empty).SendAsync("UserLeft", GetDisplayName(currentUser));
+    public async Task CreateRoom(RoomViewModel model)
+    {
+        await Clients.Caller.SendAsync("CreateRoomError", "Use CreateGroupConversation or POST api/conversations/groups for production conversations.");
     }
 
     public override async Task OnConnectedAsync()
     {
-        _logger.LogInformation("Authenticated client connected: {ConnectionId}, UserId: {UserId}", Context.ConnectionId, GetCurrentUserId());
+        var userId = GetCurrentUserId();
+        await _connectionTracker.AddConnectionAsync(userId, Context.ConnectionId);
+
+        var conversationIds = await _conversationService.GetActiveConversationIdsAsync(userId);
+        foreach (var conversationId in conversationIds)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, GetConversationGroupName(conversationId));
+        }
+
+        _logger.LogInformation(
+            "Authenticated client connected: {ConnectionId}, UserId: {UserId}, ConversationCount: {ConversationCount}",
+            Context.ConnectionId,
+            userId,
+            conversationIds.Count);
+
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        _logger.LogInformation("Authenticated client disconnected: {ConnectionId}, UserId: {UserId}", Context.ConnectionId, GetCurrentUserId());
+        var userId = GetCurrentUserId();
+        await _connectionTracker.RemoveConnectionAsync(userId, Context.ConnectionId);
+
+        _logger.LogInformation(
+            "Authenticated client disconnected: {ConnectionId}, UserId: {UserId}",
+            Context.ConnectionId,
+            userId);
+
         await base.OnDisconnectedAsync(exception);
     }
 
     private string GetCurrentUserId()
     {
-        var userId = Context.UserIdentifier ?? Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrWhiteSpace(userId))
+        if (Context.User is null)
         {
-            throw new HubException("Authenticated user id claim is missing.");
+            throw new HubException("Authenticated user is missing.");
         }
 
-        return userId;
+        try
+        {
+            return Context.User.GetRequiredUserId();
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new HubException(ex.Message);
+        }
     }
 
-    private async Task<ApplicationUser> GetCurrentUserAsync()
+    private async Task SendErrorAsync(string code, string message)
     {
-        var user = await _context.Users.FindAsync(GetCurrentUserId());
-        return user ?? throw new HubException("Authenticated user no longer exists.");
+        await Clients.Caller.SendAsync(RealtimeErrorEventName, new RealtimeErrorEvent
+        {
+            Code = code,
+            Message = string.IsNullOrWhiteSpace(message) ? "The realtime operation failed." : message
+        });
     }
 
-    private static string GetDisplayName(ApplicationUser user)
+    private static bool TryGetConversationId(string? value, out Guid conversationId)
     {
-        return user.FullName ?? user.DisplayName ?? user.UserName ?? user.Email ?? user.Id;
+        return Guid.TryParse(value, out conversationId);
+    }
+
+    private static string GetConversationGroupName(Guid conversationId)
+    {
+        return $"conversation:{conversationId:N}";
     }
 }
