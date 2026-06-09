@@ -88,6 +88,7 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddSingleton<IUserConnectionTracker, InMemoryUserConnectionTracker>();
+builder.Services.AddScoped<IUserPresenceService, UserPresenceService>();
 
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IEmailSenders>();

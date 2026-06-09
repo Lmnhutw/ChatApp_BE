@@ -27,6 +27,14 @@ public interface IConversationService
     Task<ConversationServiceResult> UpdateMessageAsync(Guid conversationId, Guid messageId, string userId, UpdateMessageRequest request);
 
     Task<ConversationServiceResult> DeleteMessageAsync(Guid conversationId, Guid messageId, string userId);
+
+    Task<ConversationServiceResult> MarkMessageReadAsync(Guid conversationId, Guid messageId, string userId);
+
+    Task<ConversationServiceResult> GetMessageReactionsAsync(Guid conversationId, Guid messageId, string userId);
+
+    Task<ConversationServiceResult> AddMessageReactionAsync(Guid conversationId, Guid messageId, string userId, AddReactionRequest request);
+
+    Task<ConversationServiceResult> RemoveMessageReactionAsync(Guid conversationId, Guid messageId, string userId, string reaction);
 }
 
 public sealed class ConversationServiceResult

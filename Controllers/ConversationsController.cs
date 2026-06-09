@@ -101,6 +101,34 @@ public class ConversationsController : ControllerBase
         return ToActionResult(result);
     }
 
+    [HttpPost("{conversationId:guid}/messages/{messageId:guid}/read")]
+    public async Task<IActionResult> MarkMessageRead(Guid conversationId, Guid messageId)
+    {
+        var result = await _conversationService.MarkMessageReadAsync(conversationId, messageId, User.GetRequiredUserId());
+        return ToActionResult(result);
+    }
+
+    [HttpGet("{conversationId:guid}/messages/{messageId:guid}/reactions")]
+    public async Task<IActionResult> GetMessageReactions(Guid conversationId, Guid messageId)
+    {
+        var result = await _conversationService.GetMessageReactionsAsync(conversationId, messageId, User.GetRequiredUserId());
+        return ToActionResult(result);
+    }
+
+    [HttpPost("{conversationId:guid}/messages/{messageId:guid}/reactions")]
+    public async Task<IActionResult> AddMessageReaction(Guid conversationId, Guid messageId, AddReactionRequest request)
+    {
+        var result = await _conversationService.AddMessageReactionAsync(conversationId, messageId, User.GetRequiredUserId(), request);
+        return ToActionResult(result);
+    }
+
+    [HttpDelete("{conversationId:guid}/messages/{messageId:guid}/reactions/{reaction}")]
+    public async Task<IActionResult> RemoveMessageReaction(Guid conversationId, Guid messageId, string reaction)
+    {
+        var result = await _conversationService.RemoveMessageReactionAsync(conversationId, messageId, User.GetRequiredUserId(), reaction);
+        return ToActionResult(result);
+    }
+
     private IActionResult ToActionResult(ConversationServiceResult result)
     {
         return result.Status switch

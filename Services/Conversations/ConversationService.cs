@@ -385,6 +385,143 @@ public sealed class ConversationService : IConversationService
         return ConversationServiceResult.Success(new { Message = "Message deleted." });
     }
 
+    public async Task<ConversationServiceResult> MarkMessageReadAsync(Guid conversationId, Guid messageId, string userId)
+    {
+        var membership = await _context.ConversationMembers.FirstOrDefaultAsync(member =>
+            member.ConversationId == conversationId &&
+            member.UserId == userId &&
+            member.LeftAt == null);
+
+        if (membership is null)
+        {
+            return ConversationServiceResult.NotFound("Conversation not found.");
+        }
+
+        var messageExists = await _context.ChatMessages.AnyAsync(message =>
+            message.Id == messageId &&
+            message.ConversationId == conversationId &&
+            message.DeletedAt == null);
+
+        if (!messageExists)
+        {
+            return ConversationServiceResult.NotFound("Message not found.");
+        }
+
+        var now = DateTime.UtcNow;
+        var receipt = await _context.MessageReadReceipts.FirstOrDefaultAsync(item =>
+            item.MessageId == messageId &&
+            item.UserId == userId);
+
+        if (receipt is null)
+        {
+            receipt = new MessageReadReceipt
+            {
+                MessageId = messageId,
+                UserId = userId
+            };
+            _context.MessageReadReceipts.Add(receipt);
+        }
+
+        receipt.ReadAt = now;
+        membership.LastReadMessageId = messageId;
+        membership.LastReadAt = now;
+
+        await _context.SaveChangesAsync();
+
+        var savedReceipt = await _context.MessageReadReceipts
+            .AsNoTracking()
+            .Include(item => item.User)
+            .FirstAsync(item => item.MessageId == messageId && item.UserId == userId);
+
+        return ConversationServiceResult.Success(ToReadReceiptResponse(savedReceipt));
+    }
+
+    public async Task<ConversationServiceResult> GetMessageReactionsAsync(Guid conversationId, Guid messageId, string userId)
+    {
+        var validationResult = await ValidateMessageAccessAsync(conversationId, messageId, userId);
+        if (!validationResult.Succeeded)
+        {
+            return validationResult;
+        }
+
+        var reactions = await _context.MessageReactions
+            .AsNoTracking()
+            .Include(reaction => reaction.User)
+            .Where(reaction => reaction.MessageId == messageId)
+            .OrderBy(reaction => reaction.CreatedAt)
+            .Select(reaction => ToReactionResponse(reaction))
+            .ToListAsync();
+
+        return ConversationServiceResult.Success(reactions);
+    }
+
+    public async Task<ConversationServiceResult> AddMessageReactionAsync(Guid conversationId, Guid messageId, string userId, AddReactionRequest request)
+    {
+        var validationResult = await ValidateMessageAccessAsync(conversationId, messageId, userId);
+        if (!validationResult.Succeeded)
+        {
+            return validationResult;
+        }
+
+        var reactionValue = request.Reaction.Trim();
+        if (string.IsNullOrWhiteSpace(reactionValue))
+        {
+            return ConversationServiceResult.BadRequest("Reaction is required.");
+        }
+
+        var existingReaction = await _context.MessageReactions.FirstOrDefaultAsync(reaction =>
+            reaction.MessageId == messageId &&
+            reaction.UserId == userId &&
+            reaction.Reaction == reactionValue);
+
+        if (existingReaction is null)
+        {
+            _context.MessageReactions.Add(new MessageReaction
+            {
+                MessageId = messageId,
+                UserId = userId,
+                Reaction = reactionValue
+            });
+
+            await _context.SaveChangesAsync();
+        }
+
+        var savedReaction = await _context.MessageReactions
+            .AsNoTracking()
+            .Include(reaction => reaction.User)
+            .FirstAsync(reaction =>
+                reaction.MessageId == messageId &&
+                reaction.UserId == userId &&
+                reaction.Reaction == reactionValue);
+
+        return ConversationServiceResult.Success(ToReactionResponse(savedReaction));
+    }
+
+    public async Task<ConversationServiceResult> RemoveMessageReactionAsync(Guid conversationId, Guid messageId, string userId, string reaction)
+    {
+        var validationResult = await ValidateMessageAccessAsync(conversationId, messageId, userId);
+        if (!validationResult.Succeeded)
+        {
+            return validationResult;
+        }
+
+        var reactionValue = reaction.Trim();
+        var existingReaction = await _context.MessageReactions.FirstOrDefaultAsync(item =>
+            item.MessageId == messageId &&
+            item.UserId == userId &&
+            item.Reaction == reactionValue);
+
+        if (existingReaction is null)
+        {
+            return ConversationServiceResult.NotFound("Reaction not found.");
+        }
+
+        _context.MessageReactions.Remove(existingReaction);
+        await _context.SaveChangesAsync();
+
+        return ConversationServiceResult.Success(new { Message = "Reaction removed.", Reaction = reactionValue });
+    }
+
     private async Task<Conversation?> GetConversationForMemberAsync(Guid conversationId, string userId, bool asTracking)
     {
         var query = _context.Conversations
@@ -411,6 +548,24 @@ public sealed class ConversationService : IConversationService
             member.ConversationId == conversationId &&
             member.UserId == userId &&
             member.LeftAt == null);
+    }
+
+    private async Task<ConversationServiceResult> ValidateMessageAccessAsync(Guid conversationId, Guid messageId, string userId)
+    {
+        var isMember = await IsActiveMemberAsync(conversationId, userId);
+        if (!isMember)
+        {
+            return ConversationServiceResult.NotFound("Conversation not found.");
+        }
+
+        var messageExists = await _context.ChatMessages.AnyAsync(message =>
+            message.Id == messageId &&
+            message.ConversationId == conversationId &&
+            message.DeletedAt == null);
+
+        return messageExists
+            ? ConversationServiceResult.Success(new { })
+            : ConversationServiceResult.NotFound("Message not found.");
     }
 
     private static bool IsAdmin(Conversation conversation, string userId)
@@ -465,6 +620,30 @@ public sealed class ConversationService : IConversationService
             CreatedAt = message.CreatedAt,
             UpdatedAt = message.UpdatedAt,
             DeletedAt = message.DeletedAt
+        };
+    }
+
+    private static MessageReadReceiptResponse ToReadReceiptResponse(MessageReadReceipt receipt)
+    {
+        return new MessageReadReceiptResponse
+        {
+            MessageId = receipt.MessageId,
+            UserId = receipt.UserId,
+            FullName = receipt.User.FullName ?? receipt.User.DisplayName,
+            ReadAt = receipt.ReadAt
+        };
+    }
+
+    private static MessageReactionResponse ToReactionResponse(MessageReaction reaction)
+    {
+        return new MessageReactionResponse
+        {
+            Id = reaction.Id,
+            MessageId = reaction.MessageId,
+            UserId = reaction.UserId,
+            FullName = reaction.User.FullName ?? reaction.User.DisplayName,
+            Reaction = reaction.Reaction,
+            CreatedAt = reaction.CreatedAt
         };
     }
 }

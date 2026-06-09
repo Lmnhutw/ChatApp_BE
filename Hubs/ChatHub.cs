@@ -15,15 +15,18 @@ public class ChatHub : Hub
 
     private readonly IConversationService _conversationService;
     private readonly IUserConnectionTracker _connectionTracker;
+    private readonly IUserPresenceService _presenceService;
     private readonly ILogger<ChatHub> _logger;
 
     public ChatHub(
         IConversationService conversationService,
         IUserConnectionTracker connectionTracker,
+        IUserPresenceService presenceService,
         ILogger<ChatHub> logger)
     {
         _conversationService = conversationService;
         _connectionTracker = connectionTracker;
+        _presenceService = presenceService;
         _logger = logger;
     }
 
@@ -134,6 +137,71 @@ public class ChatHub : Hub
         });
     }
 
+    public async Task StartTyping(Guid conversationId)
+    {
+        await SendTypingStateAsync(conversationId, isTyping: true);
+    }
+
+    public async Task StopTyping(Guid conversationId)
+    {
+        await SendTypingStateAsync(conversationId, isTyping: false);
+    }
+
+    public async Task MarkMessageRead(Guid conversationId, Guid messageId)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _conversationService.MarkMessageReadAsync(conversationId, messageId, userId);
+        if (!result.Succeeded)
+        {
+            await SendErrorAsync("mark_read_failed", result.Message);
+            return;
+        }
+
+        await Clients.Group(GetConversationGroupName(conversationId)).SendAsync("MessageRead", new MessageReadEvent
+        {
+            ConversationId = conversationId,
+            Receipt = (MessageReadReceiptResponse)result.Value!
+        });
+    }
+
+    public async Task AddMessageReaction(Guid conversationId, Guid messageId, AddReactionRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _conversationService.AddMessageReactionAsync(conversationId, messageId, userId, request);
+        if (!result.Succeeded)
+        {
+            await SendErrorAsync("add_reaction_failed", result.Message);
+            return;
+        }
+
+        await Clients.Group(GetConversationGroupName(conversationId)).SendAsync("MessageReactionAdded", new MessageReactionEvent
+        {
+            ConversationId = conversationId,
+            MessageId = messageId,
+            Reaction = (MessageReactionResponse)result.Value!,
+            UserId = userId
+        });
+    }
+
+    public async Task RemoveMessageReaction(Guid conversationId, Guid messageId, string reaction)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _conversationService.RemoveMessageReactionAsync(conversationId, messageId, userId, reaction);
+        if (!result.Succeeded)
+        {
+            await SendErrorAsync("remove_reaction_failed", result.Message);
+            return;
+        }
+
+        await Clients.Group(GetConversationGroupName(conversationId)).SendAsync("MessageReactionRemoved", new MessageReactionEvent
+        {
+            ConversationId = conversationId,
+            MessageId = messageId,
+            RemovedReaction = reaction,
+            UserId = userId
+        });
+    }
+
     public async Task CreateDirectConversation(CreateDirectConversationRequest request)
     {
         var userId = GetCurrentUserId();
@@ -209,12 +277,16 @@ public class ChatHub : Hub
     {
         var userId = GetCurrentUserId();
         await _connectionTracker.AddConnectionAsync(userId, Context.ConnectionId);
+        var connections = await _connectionTracker.GetConnectionsAsync(userId);
+        var presence = await _presenceService.MarkOnlineAsync(userId, connections.Count);
 
         var conversationIds = await _conversationService.GetActiveConversationIdsAsync(userId);
         foreach (var conversationId in conversationIds)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, GetConversationGroupName(conversationId));
         }
+
+        await Clients.Groups(conversationIds.Select(GetConversationGroupName)).SendAsync("PresenceChanged", presence);
 
         _logger.LogInformation(
             "Authenticated client connected: {ConnectionId}, UserId: {UserId}, ConversationCount: {ConversationCount}",
@@ -229,6 +301,13 @@ public class ChatHub : Hub
     {
         var userId = GetCurrentUserId();
         await _connectionTracker.RemoveConnectionAsync(userId, Context.ConnectionId);
+        var connections = await _connectionTracker.GetConnectionsAsync(userId);
+        var presence = connections.Count == 0
+            ? await _presenceService.MarkOfflineAsync(userId)
+            : await _presenceService.MarkOnlineAsync(userId, connections.Count);
+        var conversationIds = await _conversationService.GetActiveConversationIdsAsync(userId);
+
+        await Clients.Groups(conversationIds.Select(GetConversationGroupName)).SendAsync("PresenceChanged", presence);
 
         _logger.LogInformation(
             "Authenticated client disconnected: {ConnectionId}, UserId: {UserId}",
@@ -261,6 +340,24 @@ public class ChatHub : Hub
         {
             Code = code,
             Message = string.IsNullOrWhiteSpace(message) ? "The realtime operation failed." : message
+        });
+    }
+
+    private async Task SendTypingStateAsync(Guid conversationId, bool isTyping)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _conversationService.GetConversationAsync(conversationId, userId);
+        if (!result.Succeeded)
+        {
+            await SendErrorAsync("typing_failed", result.Message);
+            return;
+        }
+
+        await Clients.GroupExcept(GetConversationGroupName(conversationId), [Context.ConnectionId]).SendAsync("TypingChanged", new TypingIndicatorEvent
+        {
+            ConversationId = conversationId,
+            UserId = userId,
+            IsTyping = isTyping
         });
     }
 
